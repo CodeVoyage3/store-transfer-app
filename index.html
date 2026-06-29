@@ -16,7 +16,7 @@
       background: #F9FAFB; color: #1F2937;
     }
     .header {
-      background: #4F46E5; color: white; padding: 14px 16px;
+      background: #FFCE00; color: #1F2937; padding: 14px 16px;
       display: flex; align-items: center; justify-content: space-between;
       position: sticky; top: 0; z-index: 50;
       box-shadow: 0 2px 8px rgba(79,70,229,0.3);
@@ -129,36 +129,27 @@
     .w-full { width: 100%; }
     .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
 
-    /* ===== 扫码图标 ===== */
+    /* ===== 扫码图标（简约扫描框风格） ===== */
     .scan-icon-wrapper {
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      padding: 16px 0 12px;
+      padding: 6px 0 4px;
     }
-    .scan-icon-btn {
-      width: 56px; height: 56px; border-radius: 50%;
-      background: linear-gradient(135deg, #4F46E5, #7C3AED);
-      display: flex; align-items: center; justify-content: center;
-      cursor: pointer; border: none;
-      box-shadow: 0 6px 24px rgba(79,70,229,0.35);
-      transition: transform 0.2s, opacity 0.2s, box-shadow 0.2s;
+    .scan-icon-frame {
+      width: 52px; height: 52px;
       position: relative;
+      cursor: pointer;
+      transition: opacity 0.2s;
     }
-    .scan-icon-btn::after {
-      content: ''; position: absolute; inset: -3px; border-radius: 50%;
-      border: 2px solid rgba(79,70,229,0.2);
-      animation: scanPulse 2s ease-in-out infinite;
+    .scan-icon-text { margin-top: 2px; font-size: 11px; color: #6B7280; font-weight: 500; line-height: 1.2; }
+    .scan-icon-frame svg {
+      width: 100%; height: 100%;
+      display: block;
     }
-    @keyframes scanPulse {
-      0%, 100% { transform: scale(1); opacity: 0.5; }
-      50% { transform: scale(1.08); opacity: 0; }
+    .scan-icon-frame.disabled {
+      opacity: 0.4; cursor: not-allowed;
     }
-    .scan-icon-btn.disabled {
-      background: #D1D5DB; box-shadow: none; cursor: not-allowed;
-    }
-    .scan-icon-btn.disabled::after { display: none; }
-    .scan-icon-btn:active:not(.disabled) { transform: scale(0.93); }
-    .scan-icon-text { margin-top: 6px; font-size: 13px; color: #6B7280; font-weight: 500; }
-    .scan-icon-sub { font-size: 11px; color: #9CA3AF; margin-top: 1px; }
+    .scan-icon-frame:active:not(.disabled) { opacity: 0.7; }
+    .scan-icon-sub { display: none; }
 
     /* ===== 全屏相机覆盖层 ===== */
     .scanner-overlay-full {
@@ -274,17 +265,11 @@
 <!-- Header -->
 <div class="header">
   <div class="flex-row">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M12 22V12"/><path d="M3.3 7l8.7 5 8.7-5"/></svg>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1F2937" stroke-width="2" stroke-linecap="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M12 22V12"/><path d="M3.3 7l8.7 5 8.7-5"/></svg>
     <span style="font-size:17px;font-weight:700;">门店调拨</span>
-    <span id="storageStatus" style="font-size:10px;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,0.2);color:white;">检查中...</span>
+    <span id="storageStatus" style="font-size:10px;padding:2px 8px;border-radius:10px;background:rgba(0,0,0,0.08);color:#6B7280;">检查中...</span>
   </div>
-  <div class="flex-row" style="gap:4px;">
-    <button id="btnSaveData" style="background:rgba(255,255,255,0.15);border:none;color:white;cursor:pointer;padding:4px 6px;border-radius:8px;font-size:11px;" title="手动备份数据到文件">💾 存</button>
-    <button id="btnLoadData" style="background:rgba(255,255,255,0.15);border:none;color:white;cursor:pointer;padding:4px 6px;border-radius:8px;font-size:11px;" title="从文件恢复数据">📂 取</button>
-    <button id="btnExport" style="background:none;border:none;color:white;cursor:pointer;padding:4px 6px;border-radius:8px;" title="导出CSV">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-    </button>
-  </div>
+
 </div>
 
 <div class="main" id="app">
@@ -302,6 +287,8 @@
       <div id="infoDisplay">
         <div class="text-sm" style="color:#374151;"><span style="color:#6B7280;">单号：</span><span id="displayOrderNo" style="font-weight:600;">-</span></div>
         <div class="text-sm mt-1" style="color:#374151;"><span style="color:#6B7280;">调出：</span><span id="displayFromStore" style="font-weight:600;">-</span><span style="margin:0 8px;color:#9CA3AF;">→</span><span style="color:#6B7280;">调入：</span><span id="displayToStore" style="font-weight:600;">-</span></div>
+        <div class="text-sm mt-1" style="color:#374151;"><span style="color:#6B7280;">入库单号：</span><span id="displayInboundNo" style="font-weight:600;">-</span></div>
+        <div class="text-sm mt-1" style="color:#374151;"><span style="color:#6B7280;">调拨类型：</span><span id="displayTransferType" style="font-weight:600;">-</span></div>
       </div>
       <!-- 编辑态：可编辑输入框 -->
       <div id="infoEdit" class="hidden">
@@ -309,6 +296,14 @@
         <div class="grid-2 mb-2">
           <div><label>调出门店 *</label><input id="inputFromStore" class="input" placeholder="如：总仓" /></div>
           <div><label>调入门店 *</label><input id="inputToStore" class="input" placeholder="如：A分店" /></div>
+        </div>
+        <div class="mb-2"><label>门店入库单号</label><input id="inputInboundNo" class="input" placeholder="非必填" /></div>
+        <div class="mb-2"><label>调拨类型 *</label>
+          <select id="inputTransferType" class="input">
+            <option value="">请选择</option>
+            <option value="计调发起">计调发起</option>
+            <option value="门店创建">门店创建</option>
+          </select>
         </div>
         <div id="infoEditError" class="text-sm" style="display:none;background:#FEF2F2;color:#DC2626;border-radius:10px;padding:10px 14px;margin-bottom:6px;font-weight:500;"></div>
         <div class="flex-row gap-2">
@@ -341,18 +336,21 @@
 
 
     <!-- ② 扫码图标 -->
-    <div class="card" style="padding:12px 16px;">
+    <div class="card" style="padding:8px 16px;">
       <div class="scan-icon-wrapper">
-        <button class="scan-icon-btn disabled" id="btnOpenScanner">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round">
-            <path d="M1 4h3m-3 16h3M20 4h3m-3 16h3"/>
-            <rect x="4" y="4" width="16" height="16" rx="2"/>
-            <line x1="9" y1="8" x2="15" y2="8"/>
-            <circle cx="12" cy="13" r="3.5"/>
+        <div class="scan-icon-frame disabled" id="btnOpenScanner">
+          <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- 扫描框四角 -->
+            <path d="M8 22V12a4 4 0 0 1 4-4h10" stroke="#374151" stroke-width="3" stroke-linecap="round"/>
+            <path d="M58 8h10a4 4 0 0 1 4 4v10" stroke="#374151" stroke-width="3" stroke-linecap="round"/>
+            <path d="M72 58v10a4 4 0 0 1-4 4H58" stroke="#374151" stroke-width="3" stroke-linecap="round"/>
+            <path d="M22 72H12a4 4 0 0 1-4-4V58" stroke="#374151" stroke-width="3" stroke-linecap="round"/>
+            <!-- 扫描线 -->
+            <line x1="22" y1="40" x2="58" y2="40" stroke="#4F46E5" stroke-width="2.5" stroke-linecap="round"/>
           </svg>
-        </button>
-        <div class="scan-icon-text" id="scanIconText">请先填写基本信息</div>
-        <div class="scan-icon-sub" id="scanIconSub">填写完毕后可扫码</div>
+        </div>
+        <div class="scan-icon-text" id="scanIconText" style="color:#374151;">扫一扫</div>
+        <div class="scan-icon-sub" id="scanIconSub" style="display:none;"></div>
       </div>
     </div>
 
@@ -377,10 +375,11 @@
       </div>
     </div>
 
-    <div style="text-align:center;font-size:11px;color:#9CA3AF;margin-top:8px;">
-      💾 <span id="autoSaveHint">数据自动存到手机本地</span> · 记得右上角「💾存」手动备份
-    
-  </div>
+    <!-- ⑤ 扫码记录（最近10条） -->
+    <div class="card" id="latestScanCard" style="padding:10px 14px;">
+      <div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:6px;">📋 扫码记录</div>
+      <div id="latestScanList"></div>
+    </div>
 </div>
   </div>
 
@@ -421,7 +420,6 @@
       <div style="font-size:15px;font-weight:700;color:#374151;">📦 商品库</div>
       <div class="flex-row gap-1">
         <button id="btnImportExcel" class="btn btn-sm btn-outline" style="gap:4px;color:#059669;border-color:#059669;">📊 导入</button>
-        <button id="btnImportDemo" class="btn btn-sm btn-outline" style="gap:4px;">示例</button>
         <button id="btnAddProduct" class="btn btn-sm" style="width:auto;gap:4px;">+ 添加</button>
         <button id="btnClearProducts" class="btn btn-sm btn-outline" style="gap:4px;color:#EF4444;border-color:#EF4444;">🗑 清空</button>
       </div>
@@ -543,6 +541,14 @@
       <div><label>调出门店 *</label><input id="infoFromStore" class="input" placeholder="如：总仓" /></div>
       <div><label>调入门店 *</label><input id="infoToStore" class="input" placeholder="如：A分店" /></div>
     </div>
+    <div class="mb-2"><label>门店入库单号</label><input id="infoInboundNo" class="input" placeholder="非必填" /></div>
+    <div class="mb-2"><label>调拨类型 *</label>
+      <select id="infoTransferType" class="input">
+        <option value="">请选择</option>
+        <option value="计调发起">计调发起</option>
+        <option value="门店创建">门店创建</option>
+      </select>
+    </div>
     <div id="infoError" class="text-sm" style="display:none;background:#FEF2F2;color:#DC2626;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-weight:500;"></div>
     <button id="btnInfoConfirm" class="btn btn-green" style="margin-top:4px;">✅ 确认并进入扫码</button>
   </div>
@@ -575,6 +581,7 @@
   const KEY_TRANSFERS = 'st_transfers';
   let products = [], transfers = [];
   let currentScan = null;
+  let latestRecords = [];
   let mediaStream = null;
   let scanTimer = null;
   let isScanning = false;
@@ -699,33 +706,22 @@
     const orderNo = document.getElementById('inputOrderNo').value.trim();
     const fromStore = document.getElementById('inputFromStore').value.trim();
     const toStore = document.getElementById('inputToStore').value.trim();
+    const transferType = document.getElementById('inputTransferType').value;
     const sameStore = fromStore && toStore && fromStore === toStore;
-    const ok = orderNo && fromStore && toStore && !sameStore;
+    const ok = orderNo && fromStore && toStore && transferType && !sameStore;
     const wrapper = document.getElementById('scanSectionContent');
     const btn = document.getElementById('btnOpenScanner');
     const text = document.getElementById('scanIconText');
-    const sub = document.getElementById('scanIconSub');
     if (ok) {
       wrapper.classList.remove('hidden');
       btn.classList.remove('disabled');
-      text.textContent = '📷 点击扫码';
-      text.style.color = '#4F46E5';
-      sub.textContent = '扫描条码录入商品';
-      sub.style.color = '#9CA3AF';
-    } else if (sameStore) {
-      wrapper.classList.remove('hidden');
-      btn.classList.add('disabled');
-      text.textContent = '⚠️ 调出/调入门店不能相同';
-      text.style.color = '#DC2626';
-      sub.textContent = '请修改门店后重试';
-      sub.style.color = '#9CA3AF';
+      text.textContent = '扫一扫';
+      text.style.color = '#374151';
     } else {
       wrapper.classList.add('hidden');
       btn.classList.add('disabled');
       text.textContent = '请先填写基本信息';
-      text.style.color = '#6B7280';
-      sub.textContent = '填写完毕后可扫码';
-      sub.style.color = '#9CA3AF';
+      text.style.color = '#9CA3AF';
     }
   }
 
@@ -735,9 +731,13 @@
     const orderNo = document.getElementById('inputOrderNo').value.trim();
     const fromStore = document.getElementById('inputFromStore').value.trim();
     const toStore = document.getElementById('inputToStore').value.trim();
+    const inboundNo = document.getElementById('inputInboundNo').value.trim();
+    const transferType = document.getElementById('inputTransferType').value;
     document.getElementById('displayOrderNo').textContent = orderNo || '-';
     document.getElementById('displayFromStore').textContent = fromStore || '-';
     document.getElementById('displayToStore').textContent = toStore || '-';
+    document.getElementById('displayInboundNo').textContent = inboundNo || '-';
+    document.getElementById('displayTransferType').textContent = transferType || '-';
     document.getElementById('infoDisplay').classList.remove('hidden');
     document.getElementById('infoEdit').classList.add('hidden');
     document.getElementById('btnToggleEdit').style.display = 'block';
@@ -1027,7 +1027,8 @@
       html += '<div class="card" style="padding:12px 14px;margin-bottom:10px;">';
       html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">';
       html += '<input type="checkbox" class="order-check" data-order="'+esc(orderNo)+'" '+checked+' style="width:16px;height:16px;accent-color:#4F46E5;flex-shrink:0;" />';
-      html += '<span style="font-size:14px;font-weight:700;color:#4F46E5;flex:1;">📄 ' + esc(orderNo) + ' <span style="font-size:12px;font-weight:400;color:#9CA3AF;">共 ' + orderTotal + ' 条</span></span></div>';
+      html += '<span style="font-size:14px;font-weight:700;color:#4F46E5;flex:1;">📄 ' + esc(orderNo) + ' <span style="font-size:12px;font-weight:400;color:#9CA3AF;">共 ' + orderTotal + ' 条</span></span>';
+      html += '<button class="btn-del-order" data-order="'+esc(orderNo)+'" style="background:none;border:none;padding:4px;cursor:pointer;color:#EF4444;font-size:16px;line-height:1;flex-shrink:0;" title="删除此单据">🗑</button></div>';
       boxNos.forEach(boxNo => {
         const records = boxes[boxNo];
         const boxQty = records.reduce((s, r) => s + (r.quantity || 0), 0);
@@ -1102,19 +1103,141 @@
     modal.classList.add('open');
   }
 
-  // ===== Export CSV =====
+  // ===== 扫码记录（最近10条） =====
+  function renderLatestRecords() {
+    const container = document.getElementById('latestScanList');
+    if (latestRecords.length === 0) {
+      container.innerHTML = '<div style="text-align:center;padding:10px 0;font-size:12px;color:#9CA3AF;">暂无扫码记录</div>';
+      return;
+    }
+    container.innerHTML = latestRecords.map(r =>
+      '<div style="display:flex;align-items:center;padding:4px 0;border-bottom:1px solid #F3F4F6;font-size:12px;">' +
+      '<span style="color:#6B7280;flex-shrink:0;">条码 </span>' +
+      '<span class="font-mono" style="flex:1;color:#374151;font-weight:500;">' + esc(r.barcode) + '</span>' +
+      '<span style="color:#6B7280;flex-shrink:0;margin-left:6px;">数量 </span>' +
+      '<span style="color:#4F46E5;font-weight:700;">' + r.quantity + '</span>' +
+      '<span style="color:#9CA3AF;margin-left:6px;">第' + r.boxNo + '箱</span>' +
+      '</div>'
+    ).join('');
+  }
+  function addLatestRecord(barcode, quantity, boxNo) {
+    latestRecords.unshift({ barcode, quantity, boxNo });
+    if (latestRecords.length > 10) latestRecords.pop();
+    renderLatestRecords();
+  }
+
+  // ===== Export XLSX（按模板格式导出，支持合并单元格，优先分享，备选下载） =====
+  function nowStr() {
+    const d = new Date();
+    const pad = n => String(n).padStart(2,'0');
+    return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+' '+pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
+  }
   function exportCSVWithData(dataList, filename) {
     if (dataList.length === 0) { toast('暂无记录可导出', 'error'); return; }
-    const h = ['序号','调拨单号','箱号','条码','商品名称','数量','单位','调出门店','调入门店','备注','录入时间'];
-    const rows = dataList.map((r,i) => [i+1, r.orderNo||'', r.boxNo||1, r.barcode, r.productName||'', r.quantity, r.unit||'个', r.fromStore||'', r.toStore||'', r.note||'', fmtDate(r.timestamp)].map(v => '"'+String(v).replace(/"/g,'""')+'"').join(','));
-    const csv = '\uFEFF' + h.join(',') + '\n' + rows.join('\n');
-    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    // 按调拨单号分组
+    const groups = {};
+    dataList.forEach(r => {
+      const key = r.orderNo || '（未填单号）';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(r);
+    });
+    const h = ['门店调拨单号','货源门店','目标门店','创建时间','调拨类型','门店入库单号','备注','商品条形码','商品名称','实调数量','总计','仓库','箱号'];
+    const exportTime = nowStr();
+    const sheetData = [h];
+    const merges = [];
+    let globalRow = 1; // 当前数据行在 sheet 中的行号（0=表头，1=第一条数据）
+
+    Object.keys(groups).forEach(orderNo => {
+      const items = groups[orderNo].sort((a, b) => (a.boxNo||1) - (b.boxNo||1));
+      const first = items[0];
+      const totalQty = items.reduce((s, r) => s + (parseInt(r.quantity) || 0), 0);
+      const startRow = globalRow;
+      let lastBoxNo = -1;
+      let boxStartRow = globalRow;
+
+      items.forEach((r, idx) => {
+        const row = [];
+        const isFirstRow = idx === 0;
+        // 单据信息（合并居中：仅第一行填写）
+        if (isFirstRow) {
+          row.push(orderNo);
+          row.push(first.fromStore || '');
+          row.push(first.toStore || '');
+          row.push(exportTime);
+          row.push(first.transferType || '调拨出库');
+          row.push(first.inboundNo || '');
+          row.push(first.note || '');
+        } else {
+          row.push(''); row.push(''); row.push(''); row.push(''); row.push(''); row.push(''); row.push('');
+        }
+        // 商品明细每行独立
+        row.push(r.barcode || '');
+        row.push(r.productName || '');
+        row.push(parseInt(r.quantity) || 0);
+        // 总计（合并居中：仅第一行填写）
+        row.push(isFirstRow ? totalQty : '');
+        // 仓库每行填写
+        row.push((first.fromStore || '')+'正常仓');
+        // 箱号（合并居中：每箱第一行填写）
+        const boxNo = r.boxNo || 1;
+        if (boxNo !== lastBoxNo) {
+          if (lastBoxNo !== -1 && globalRow - 1 > boxStartRow) {
+            merges.push({s:{r:boxStartRow,c:12}, e:{r:globalRow-1,c:12}});
+          }
+          row.push('第'+boxNo+'箱');
+          lastBoxNo = boxNo;
+          boxStartRow = globalRow;
+        } else {
+          row.push('');
+        }
+        sheetData.push(row);
+        globalRow++;
+      });
+      // 合并当前组的箱号尾段
+      if (globalRow - 1 > boxStartRow) {
+        merges.push({s:{r:boxStartRow,c:12}, e:{r:globalRow-1,c:12}});
+      }
+      // 合并单据级字段：A-G 列 + K 列（总计）
+      const endRow = globalRow - 1;
+      if (endRow > startRow) {
+        for (let c = 0; c <= 6; c++) merges.push({s:{r:startRow,c}, e:{r:endRow,c}});
+        merges.push({s:{r:startRow,c:10}, e:{r:endRow,c:10}}); // 总计 K 列
+      }
+    });
+
+    // 创建 XLSX workbook
+    const ws = XLSX.utils.aoa_to_sheet(sheetData);
+    ws['!merges'] = merges;
+    // 设置列宽
+    ws['!cols'] = [
+              {wch:22},{wch:18},{wch:18},{wch:20},{wch:12},{wch:18},{wch:16},
+      {wch:16},{wch:30},{wch:10},{wch:8},{wch:22},{wch:8}
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '调拨单');
+    const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+    const blob = new Blob([wbout], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const file = new File([blob], filename+'.xlsx', {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+
+    if (navigator.share && navigator.canShare && navigator.canShare({files: [file]})) {
+      navigator.share({ files: [file], title: '门店调拨单', text: '共 '+dataList.length+' 条商品记录' })
+        .then(() => toast('已分享 '+dataList.length+' 条记录', 'success'))
+        .catch(err => {
+          if (err.name !== 'AbortError') {
+            fallbackDownload(blob, filename, dataList.length);
+          }
+        });
+    } else {
+      fallbackDownload(blob, filename, dataList.length);
+    }
+  }
+  function fallbackDownload(blob, filename, count) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = filename+'.csv';
+    a.href = url; a.download = filename+'.xlsx';
     document.body.appendChild(a); a.click();
     document.body.removeChild(a); URL.revokeObjectURL(url);
-    toast('已导出 '+dataList.length+' 条记录', 'success');
+    toast('已导出 '+count+' 条记录', 'success');
   }
   function exportCSV() {
     exportCSVWithData(transfers, '调拨记录_'+today());
@@ -1124,15 +1247,18 @@
   loadData();
   renderProducts();
   renderRecords();
+  renderLatestRecords();
 
   // ===== 调拨基本信息弹窗 =====
   document.getElementById('btnInfoConfirm').addEventListener('click', () => {
     const orderNo = document.getElementById('infoOrderNo').value.trim();
     const fromStore = document.getElementById('infoFromStore').value.trim();
     const toStore = document.getElementById('infoToStore').value.trim();
+    const inboundNo = document.getElementById('infoInboundNo').value.trim();
+    const transferType = document.getElementById('infoTransferType').value;
     const errEl = document.getElementById('infoError');
-    if (!orderNo || !fromStore || !toStore) {
-      errEl.textContent = '请填写完整信息';
+    if (!orderNo || !fromStore || !toStore || !transferType) {
+      errEl.textContent = '请填写完整信息（调拨类型为必填项）';
       errEl.style.display = 'block';
       return;
     }
@@ -1146,6 +1272,8 @@
     document.getElementById('inputOrderNo').value = orderNo;
     document.getElementById('inputFromStore').value = fromStore;
     document.getElementById('inputToStore').value = toStore;
+    document.getElementById('inputInboundNo').value = inboundNo;
+    document.getElementById('inputTransferType').value = transferType;
     document.getElementById('infoModal').classList.remove('open');
     switchToLockedMode();
     currentBoxNo = 1;
@@ -1227,11 +1355,14 @@
       unit: (currentScan.product && currentScan.product.unit) || '个',
       fromStore: document.getElementById('inputFromStore').value.trim(),
       toStore: document.getElementById('inputToStore').value.trim(),
+      inboundNo: document.getElementById('inputInboundNo').value.trim(),
+      transferType: document.getElementById('inputTransferType').value,
       note: '',
       timestamp: new Date().toISOString()
     });
     saveTransfers();
     updateBoxUI();
+    addLatestRecord(currentScan.barcode, qty, currentBoxNo);
     // 显示居中成功弹窗
     document.getElementById('successMsg').innerHTML = currentScan.barcode + ' × ' + qty + '<br><span style="font-size:13px;color:#6B7280;">第 ' + currentBoxNo + ' 箱</span>';
     document.getElementById('successPopup').classList.add('open');
@@ -1257,9 +1388,13 @@
       const oldOrder = document.getElementById('displayOrderNo').textContent;
       const oldFrom = document.getElementById('displayFromStore').textContent;
       const oldTo = document.getElementById('displayToStore').textContent;
+      const oldInbound = document.getElementById('displayInboundNo').textContent;
+      const oldType = document.getElementById('displayTransferType').textContent;
       document.getElementById('inputOrderNo').value = oldOrder !== '-' ? oldOrder : '';
       document.getElementById('inputFromStore').value = oldFrom !== '-' ? oldFrom : '';
       document.getElementById('inputToStore').value = oldTo !== '-' ? oldTo : '';
+      document.getElementById('inputInboundNo').value = oldInbound !== '-' ? oldInbound : '';
+      document.getElementById('inputTransferType').value = oldType !== '-' ? oldType : '';
       document.getElementById('infoEditError').style.display = 'none';
       switchToLockedMode();
     } else {
@@ -1275,9 +1410,10 @@
     const orderNo = document.getElementById('inputOrderNo').value.trim();
     const fromStore = document.getElementById('inputFromStore').value.trim();
     const toStore = document.getElementById('inputToStore').value.trim();
+    const transferType = document.getElementById('inputTransferType').value;
     const errEl = document.getElementById('infoEditError');
-    if (!orderNo || !fromStore || !toStore) {
-      errEl.textContent = '请填写完整信息';
+    if (!orderNo || !fromStore || !toStore || !transferType) {
+      errEl.textContent = '请填写完整信息（调拨类型为必填项）';
       errEl.style.display = 'block';
       return;
     }
@@ -1303,6 +1439,8 @@
     document.getElementById('inputOrderNo').value = '';
     document.getElementById('inputFromStore').value = '';
     document.getElementById('inputToStore').value = '';
+    document.getElementById('inputInboundNo').value = '';
+    document.getElementById('inputTransferType').value = '';
     document.getElementById('infoEditError').style.display = 'none';
     // 重置箱管理
     currentBoxNo = 1;
@@ -1472,19 +1610,7 @@
     input.click();
   });
 
-  document.getElementById('btnImportDemo').addEventListener('click', () => {
-    if (products.length > 0 && !confirm('导入示例会覆盖现有商品，确认？')) return;
-    products = [
-      { barcode:'6901234567890', name:'农夫山泉矿泉水', unit:'瓶', spec:'550ml', createdAt: new Date().toISOString() },
-      { barcode:'6909876543210', name:'康师傅方便面', unit:'箱', spec:'12桶装', createdAt: new Date().toISOString() },
-      { barcode:'6912345678901', name:'蒙牛纯牛奶', unit:'箱', spec:'250ml×24盒', createdAt: new Date().toISOString() },
-      { barcode:'6923456789012', name:'青岛啤酒', unit:'箱', spec:'500ml×12听', createdAt: new Date().toISOString() },
-      { barcode:'6934567890123', name:'心相印抽纸', unit:'提', spec:'3层×10包', createdAt: new Date().toISOString() },
-    ];
-    saveProducts(); renderProducts(); toast('已导入5个示例商品', 'success');
-  });
-
-  // Modal
+    // Modal
   document.querySelectorAll('.modalClose').forEach(b => b.addEventListener('click', () => b.closest('.modal').classList.remove('open')));
   document.getElementById('productModal').addEventListener('click', e => { if (e.target === e.currentTarget) e.target.classList.remove('open'); });
   document.getElementById('recordModal').addEventListener('click', e => { if (e.target === e.currentTarget) e.target.classList.remove('open'); });
@@ -1567,13 +1693,8 @@
     }
   });
 
-  // 手动存/取
-  document.getElementById('btnSaveData').addEventListener('click', exportAllData);
-  document.getElementById('btnLoadData').addEventListener('click', importAllData);
-
   // 导出 CSV
-  document.getElementById('btnExport').addEventListener('click', exportCSV);
-
+  
   // 全选 / 取消全选
   document.getElementById('checkSelectAll').addEventListener('change', (e) => {
     const checked = e.target.checked;
@@ -1642,16 +1763,41 @@
       storageOk = false;
     }
     updateStorageStatus();
-    document.getElementById('autoSaveHint').textContent = storageOk
-      ? '数据自动存到手机本地'
-      : '此浏览器不支持自动存，请手动点💾存备份';
     if (!storageOk) {
       toast('📌 提示：当前环境无法自动保存，请用右上角「💾存」手动备份数据', '');
     }
   }, 1000);
 
-  // 事件委托：记录列表点击编辑
+  // 事件委托：记录列表
   document.getElementById('recordsList').addEventListener('click', (e) => {
+    // 删除整张单据（双重确认）
+    const delBtn = e.target.closest('.btn-del-order');
+    if (delBtn) {
+      const orderNo = delBtn.dataset.order;
+      const count = transfers.filter(r => (r.orderNo || '（未填单号）') === orderNo).length;
+      showConfirm({
+        title: '删除此单据？',
+        msg: '确定要删除调拨单号 <b>' + esc(orderNo) + '</b> 的全部 <b>' + count + '</b> 条记录吗？',
+        danger: true, okText: '确认删除',
+        onOk: () => {
+          showConfirm({
+            title: '再次确认',
+            msg: '真的要删除全部 <b>' + count + '</b> 条记录吗？<br>删除后不可恢复！',
+            danger: true, okText: '确认删除',
+            onOk: () => {
+              transfers = transfers.filter(r => (r.orderNo || '（未填单号）') !== orderNo);
+              selectedOrders.delete(orderNo);
+              saveTransfers();
+              renderRecords();
+              updateSelectAllState();
+              toast('已删除单据 ' + esc(orderNo), 'success');
+            }
+          });
+        }
+      });
+      return;
+    }
+    // 点击记录项编辑
     const item = e.target.closest('.record-item');
     if (item) {
       const rec = transfers.find(r => r.id === item.dataset.id);
