@@ -72,7 +72,7 @@
     .badge-green { background: #D1FAE5; color: #059669; }
     .badge-yellow { background: #FEF3C7; color: #D97706; }
     .toast {
-      position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 999;
+      position: absolute; top: 120px; left: 50%; transform: translateX(-50%); z-index: 999;
       padding: 10px 20px; border-radius: 10px; color: white; font-size: 14px; font-weight: 500;
       box-shadow: 0 4px 16px rgba(0,0,0,0.2); opacity: 0; transition: opacity 0.3s; pointer-events: none;
     }
@@ -132,10 +132,10 @@
     /* ===== 扫码图标 ===== */
     .scan-icon-wrapper {
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      padding: 28px 0 24px;
+      padding: 16px 0 12px;
     }
     .scan-icon-btn {
-      width: 84px; height: 84px; border-radius: 50%;
+      width: 56px; height: 56px; border-radius: 50%;
       background: linear-gradient(135deg, #4F46E5, #7C3AED);
       display: flex; align-items: center; justify-content: center;
       cursor: pointer; border: none;
@@ -144,7 +144,7 @@
       position: relative;
     }
     .scan-icon-btn::after {
-      content: ''; position: absolute; inset: -4px; border-radius: 50%;
+      content: ''; position: absolute; inset: -3px; border-radius: 50%;
       border: 2px solid rgba(79,70,229,0.2);
       animation: scanPulse 2s ease-in-out infinite;
     }
@@ -157,8 +157,8 @@
     }
     .scan-icon-btn.disabled::after { display: none; }
     .scan-icon-btn:active:not(.disabled) { transform: scale(0.93); }
-    .scan-icon-text { margin-top: 10px; font-size: 14px; color: #6B7280; font-weight: 500; }
-    .scan-icon-sub { font-size: 12px; color: #9CA3AF; margin-top: 2px; }
+    .scan-icon-text { margin-top: 6px; font-size: 13px; color: #6B7280; font-weight: 500; }
+    .scan-icon-sub { font-size: 11px; color: #9CA3AF; margin-top: 1px; }
 
     /* ===== 全屏相机覆盖层 ===== */
     .scanner-overlay-full {
@@ -292,13 +292,29 @@
   <!-- ===== 扫码页 ===== -->
   <div id="sectionScan" class="section active">
 
-    <!-- ① 调拨基本信息 -->
-    <div class="card">
-      <div style="font-size:14px;font-weight:700;color:#374151;margin-bottom:12px;">📋 调拨基本信息</div>
-      <div class="mb-2"><label>调拨单号 *</label><input id="inputOrderNo" class="input" placeholder="如：DB20240601-001" /></div>
-      <div class="grid-2 mb-2">
-        <div><label>调出门店 *</label><input id="inputFromStore" class="input" placeholder="如：总仓" /></div>
-        <div><label>调入门店 *</label><input id="inputToStore" class="input" placeholder="如：A分店" /></div>
+    <!-- ① 调拨基本信息（锁定态 / 编辑态） -->
+    <div class="card" id="infoCard">
+      <div class="flex-between mb-2">
+        <div style="font-size:14px;font-weight:700;color:#374151;">📋 调拨基本信息</div>
+        <button id="btnToggleEdit" class="btn btn-sm btn-outline" style="width:auto;gap:3px;padding:5px 10px;font-size:11px;display:none;">✏️ 修改</button>
+      </div>
+      <!-- 锁定态：只读显示 -->
+      <div id="infoDisplay">
+        <div class="text-sm" style="color:#374151;"><span style="color:#6B7280;">单号：</span><span id="displayOrderNo" style="font-weight:600;">-</span></div>
+        <div class="text-sm mt-1" style="color:#374151;"><span style="color:#6B7280;">调出：</span><span id="displayFromStore" style="font-weight:600;">-</span><span style="margin:0 8px;color:#9CA3AF;">→</span><span style="color:#6B7280;">调入：</span><span id="displayToStore" style="font-weight:600;">-</span></div>
+      </div>
+      <!-- 编辑态：可编辑输入框 -->
+      <div id="infoEdit" class="hidden">
+        <div class="mb-2"><label>调拨单号 *</label><input id="inputOrderNo" class="input" placeholder="如：DB20240601-001" /></div>
+        <div class="grid-2 mb-2">
+          <div><label>调出门店 *</label><input id="inputFromStore" class="input" placeholder="如：总仓" /></div>
+          <div><label>调入门店 *</label><input id="inputToStore" class="input" placeholder="如：A分店" /></div>
+        </div>
+        <div id="infoEditError" class="text-sm" style="display:none;background:#FEF2F2;color:#DC2626;border-radius:10px;padding:10px 14px;margin-bottom:6px;font-weight:500;"></div>
+        <div class="flex-row gap-2">
+          <button id="btnResetInfoEdit" class="btn btn-sm btn-outline" style="flex:1;color:#EF4444;border-color:#EF4444;">🔄 重置</button>
+          <button id="btnSaveInfoEdit" class="btn btn-sm btn-green" style="flex:1;">✅ 确认修改</button>
+        </div>
       </div>
     </div>
     <!-- ② 扫码图标 + 手动输入（填写基本信息后显示） -->
@@ -328,7 +344,7 @@
     <div class="card" style="padding:12px 16px;">
       <div class="scan-icon-wrapper">
         <button class="scan-icon-btn disabled" id="btnOpenScanner">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round">
             <path d="M1 4h3m-3 16h3M20 4h3m-3 16h3"/>
             <rect x="4" y="4" width="16" height="16" rx="2"/>
             <line x1="9" y1="8" x2="15" y2="8"/>
@@ -375,25 +391,25 @@
       <div class="flex-row">
         <span id="recordCount" style="font-size:12px;color:#9CA3AF;">共 0 条</span>
         <button id="btnClearRecords" class="btn btn-sm btn-outline" style="gap:4px;color:#EF4444;border-color:#EF4444;padding:6px 10px;font-size:11px;">🗑 清空</button>
-        <button id="btnExport2" class="btn btn-sm btn-outline" style="gap:4px;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          导出
-        </button>
       </div>
+    </div>
+    <div class="flex-row" style="margin-bottom:8px;gap:6px;">
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:#6B7280;cursor:pointer;">
+        <input type="checkbox" id="checkSelectAll" checked style="width:16px;height:16px;accent-color:#4F46E5;" />
+        <span>全选</span>
+      </label>
+      <span id="selectedCount" style="font-size:12px;color:#9CA3AF;flex:1;">已选 0 张单据</span>
+      <button id="btnExportSelected" class="btn btn-sm btn-outline" style="gap:4px;padding:4px 10px;font-size:11px;color:#059669;border-color:#059669;">
+        📤 导出选中
+      </button>
     </div>
     <div class="flex-row" style="margin-bottom:10px;gap:6px;">
       <div class="search-box" style="flex:1;margin-bottom:0;">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input id="inputSearchRecord" placeholder="搜索商品/条码/门店..." />
       </div>
-      <select id="selectBoxFilter" style="border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 10px;font-size:13px;background:white;">
-        <option value="all">全部箱</option>
-      </select>
-      <select id="selectDateFilter" style="border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 10px;font-size:13px;background:white;">
-        <option value="all">全部时间</option>
-        <option value="today">今天</option>
-        <option value="week">本周</option>
-        <option value="month">本月</option>
+      <select id="selectStoreFilter" style="border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 10px;font-size:13px;background:white;">
+        <option value="all">调入门店</option>
       </select>
     </div>
     <div id="recordsList"></div>
@@ -494,6 +510,7 @@
       <div><label>数量</label><input id="recModalQty" type="number" min="1" step="1" class="input" /></div>
       <div><label>箱号</label><input id="recModalBox" type="number" min="1" step="1" class="input" value="1" /></div>
     </div>
+    <div id="recModalError" class="text-sm" style="display:none;background:#FEF2F2;color:#DC2626;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-weight:500;">⚠️ 商品未查到，无法保存</div>
     <input type="hidden" id="recModalId" />
     <div class="flex-row gap-2 mt-2">
       <button id="btnDeleteRecord" class="btn btn-sm btn-danger" style="flex:1;">🗑 删除</button>
@@ -515,12 +532,37 @@
   </div>
 </div>
 
+<!-- ===== 调拨基本信息弹窗（初始弹出） ===== -->
+<div id="infoModal" class="modal" style="position:absolute;z-index:400;">
+  <div class="modal-box">
+    <div class="flex-between mb-3">
+      <span style="font-size:17px;font-weight:700;">📋 调拨基本信息</span>
+    </div>
+    <div class="mb-2"><label>调拨单号 *</label><input id="infoOrderNo" class="input" placeholder="如：DB20240601-001" /></div>
+    <div class="grid-2 mb-2">
+      <div><label>调出门店 *</label><input id="infoFromStore" class="input" placeholder="如：总仓" /></div>
+      <div><label>调入门店 *</label><input id="infoToStore" class="input" placeholder="如：A分店" /></div>
+    </div>
+    <div id="infoError" class="text-sm" style="display:none;background:#FEF2F2;color:#DC2626;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-weight:500;"></div>
+    <button id="btnInfoConfirm" class="btn btn-green" style="margin-top:4px;">✅ 确认并进入扫码</button>
+  </div>
+</div>
+
 <!-- ===== 成功录入弹窗（居中显示） ===== -->
 <div id="successPopup" class="confirm-overlay">
   <div class="confirm-box" style="padding:32px 24px 28px;text-align:center;">
     <div class="confirm-icon" style="background:#D1FAE5;color:#059669;">✅</div>
     <div class="confirm-title" style="color:#059669;">已录入</div>
     <div class="confirm-msg" id="successMsg" style="font-size:15px;color:#374151;margin-bottom:0;"></div>
+  </div>
+</div>
+
+<!-- ===== 居中警告弹窗 ===== -->
+<div id="alertPopup" class="confirm-overlay">
+  <div class="confirm-box" style="padding:32px 24px 28px;text-align:center;">
+    <div class="confirm-icon" style="background:#FEF2F2;color:#DC2626;">⚠️</div>
+    <div class="confirm-title" style="color:#DC2626;">提示</div>
+    <div class="confirm-msg" id="alertMsg" style="font-size:15px;color:#374151;margin-bottom:0;"></div>
   </div>
 </div>
 
@@ -657,7 +699,8 @@
     const orderNo = document.getElementById('inputOrderNo').value.trim();
     const fromStore = document.getElementById('inputFromStore').value.trim();
     const toStore = document.getElementById('inputToStore').value.trim();
-    const ok = orderNo && fromStore && toStore;
+    const sameStore = fromStore && toStore && fromStore === toStore;
+    const ok = orderNo && fromStore && toStore && !sameStore;
     const wrapper = document.getElementById('scanSectionContent');
     const btn = document.getElementById('btnOpenScanner');
     const text = document.getElementById('scanIconText');
@@ -669,6 +712,13 @@
       text.style.color = '#4F46E5';
       sub.textContent = '扫描条码录入商品';
       sub.style.color = '#9CA3AF';
+    } else if (sameStore) {
+      wrapper.classList.remove('hidden');
+      btn.classList.add('disabled');
+      text.textContent = '⚠️ 调出/调入门店不能相同';
+      text.style.color = '#DC2626';
+      sub.textContent = '请修改门店后重试';
+      sub.style.color = '#9CA3AF';
     } else {
       wrapper.classList.add('hidden');
       btn.classList.add('disabled');
@@ -677,6 +727,22 @@
       sub.textContent = '填写完毕后可扫码';
       sub.style.color = '#9CA3AF';
     }
+  }
+
+  // ===== 锁定/编辑切换 =====
+  let isEditingInfo = false;
+  function switchToLockedMode() {
+    const orderNo = document.getElementById('inputOrderNo').value.trim();
+    const fromStore = document.getElementById('inputFromStore').value.trim();
+    const toStore = document.getElementById('inputToStore').value.trim();
+    document.getElementById('displayOrderNo').textContent = orderNo || '-';
+    document.getElementById('displayFromStore').textContent = fromStore || '-';
+    document.getElementById('displayToStore').textContent = toStore || '-';
+    document.getElementById('infoDisplay').classList.remove('hidden');
+    document.getElementById('infoEdit').classList.add('hidden');
+    document.getElementById('btnToggleEdit').style.display = 'block';
+    document.getElementById('btnToggleEdit').textContent = '✏️ 修改';
+    isEditingInfo = false;
   }
 
   // ===== 箱管理 =====
@@ -873,7 +939,7 @@
     const r = document.getElementById('scanResult');
     r.classList.remove('hidden');
     document.getElementById('scanBarcode').textContent = code;
-    document.getElementById('scanProductName').textContent = matched ? matched.name : '（未匹配到商品）';
+    document.getElementById('scanProductName').textContent = matched ? matched.name : '未查到商品信息';
     document.getElementById('scanBoxNo').textContent = '第 ' + currentBoxNo + ' 箱';
     setTimeout(() => document.getElementById('inputQuantity').focus(), 300);
   }
@@ -893,7 +959,7 @@
     document.querySelectorAll('.tab-bar button').forEach(b => b.classList.remove('active'));
     const tabMap = { sectionScan: 'tabScan', sectionRecords: 'tabRecords', sectionProducts: 'tabProducts' };
     document.getElementById(tabMap[sectionId]).classList.add('active');
-    if (sectionId === 'sectionRecords') { updateBoxFilter(); renderRecords(); }
+    if (sectionId === 'sectionRecords') { updateStoreFilter(); renderRecords(); }
     if (sectionId === 'sectionProducts') renderProducts();
   }
 
@@ -915,16 +981,15 @@
     }));
   }
 
+  // 已选中的调拨单号
+  let selectedOrders = new Set();
+
   function renderRecords() {
     const container = document.getElementById('recordsList');
     const q = document.getElementById('inputSearchRecord').value.toLowerCase().trim();
-    const df = document.getElementById('selectDateFilter').value;
-    const bf = document.getElementById('selectBoxFilter').value;
+    const sf = document.getElementById('selectStoreFilter').value;
     let list = [...transfers];
-    if (df === 'today') list = list.filter(r => r.timestamp.startsWith(today()));
-    else if (df === 'week') list = list.filter(r => r.timestamp >= weekStart());
-    else if (df === 'month') list = list.filter(r => r.timestamp >= monthStart());
-    if (bf !== 'all') list = list.filter(r => r.boxNo === parseInt(bf));
+    if (sf !== 'all') list = list.filter(r => (r.toStore || '') === sf);
     if (q) list = list.filter(r => (r.productName && r.productName.toLowerCase().includes(q)) || r.barcode.includes(q));
     list.sort((a,b) => b.timestamp.localeCompare(a.timestamp));
     document.getElementById('recordCount').textContent = '共 '+list.length+' 条';
@@ -932,17 +997,64 @@
       container.innerHTML = '<div class="empty"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#D1D5DB" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><p>'+(transfers.length===0?'暂无调拨记录':'未找到匹配的记录')+'</p></div>';
       return;
     }
-    container.innerHTML = list.map(r => '<div class="record-item" data-id="'+r.id+'" style="cursor:pointer;"><div class="flex-1" style="min-width:0;"><div class="flex-between"><span style="font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(r.productName||'未知商品')+'</span><span style="font-size:16px;font-weight:700;color:#4F46E5;">×'+r.quantity+'</span></div><div class="text-xs text-gray2 font-mono" style="margin-top:2px;">'+esc(r.barcode)+'</div><div class="text-xs" style="margin-top:4px;color:#4F46E5;">📦 第'+(r.boxNo||1)+'箱</div></div></div>').join('');
-    // 点击整条记录 → 编辑
-    container.querySelectorAll('.record-item').forEach(el => {
-      el.addEventListener('click', () => {
-        const rec = transfers.find(r => r.id === el.dataset.id);
-        if (rec) openRecordModal(rec);
-      });
+
+    // 按调拨单号分组 → 按箱号分组
+    const groups = {};
+    list.forEach(r => {
+      const orderNo = r.orderNo || '（未填单号）';
+      if (!groups[orderNo]) groups[orderNo] = {};
+      const box = r.boxNo || 1;
+      if (!groups[orderNo][box]) groups[orderNo][box] = [];
+      groups[orderNo][box].push(r);
     });
+
+    const currentOrderNos = Object.keys(groups).sort((a,b) => b.localeCompare(a));
+
+    // 首次或当前无选中时，默认全选当前单据
+    if (selectedOrders.size === 0) {
+      currentOrderNos.forEach(o => selectedOrders.add(o));
+    } else {
+      // 清理已不存在的单号
+      selectedOrders.forEach(o => { if (!currentOrderNos.includes(o)) selectedOrders.delete(o); });
+    }
+
+    let html = '';
+    currentOrderNos.forEach(orderNo => {
+      const checked = selectedOrders.has(orderNo) ? 'checked' : '';
+      const boxes = groups[orderNo];
+      const boxNos = Object.keys(boxes).map(Number).sort((a,b) => a-b);
+      const orderTotal = boxNos.reduce((s, b) => s + boxes[b].length, 0);
+      html += '<div class="card" style="padding:12px 14px;margin-bottom:10px;">';
+      html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">';
+      html += '<input type="checkbox" class="order-check" data-order="'+esc(orderNo)+'" '+checked+' style="width:16px;height:16px;accent-color:#4F46E5;flex-shrink:0;" />';
+      html += '<span style="font-size:14px;font-weight:700;color:#4F46E5;flex:1;">📄 ' + esc(orderNo) + ' <span style="font-size:12px;font-weight:400;color:#9CA3AF;">共 ' + orderTotal + ' 条</span></span></div>';
+      boxNos.forEach(boxNo => {
+        const records = boxes[boxNo];
+        const boxQty = records.reduce((s, r) => s + (r.quantity || 0), 0);
+        html += '<div style="margin-bottom:6px;">';
+        html += '<div style="font-size:12px;font-weight:600;color:#6B7280;padding:4px 0;border-bottom:1px solid #F3F4F6;margin-bottom:4px;">📦 第' + boxNo + ' 箱 <span style="font-weight:400;color:#9CA3AF;">（' + records.length + ' 条 · ' + boxQty + ' 件）</span></div>';
+        records.forEach(r => {
+          html += '<div class="record-item" data-id="'+r.id+'" style="cursor:pointer;border-left-color:#9CA3AF;padding:6px 10px;margin-bottom:2px;">';
+          html += '<div class="flex-between"><span style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(r.productName||'未知商品')+'</span><span style="font-size:14px;font-weight:700;color:#4F46E5;">×'+r.quantity+'</span></div>';
+          html += '<div class="text-xs text-gray2 font-mono" style="margin-top:1px;">'+esc(r.barcode)+'</div>';
+          html += '</div>';
+        });
+        html += '</div>';
+      });
+      html += '</div>';
+    });
+    container.innerHTML = html;
+    updateSelectAllState();
   }
 
-  // ===== 记录编辑弹窗 =====
+  function updateSelectAllState() {
+    const checks = document.querySelectorAll('.order-check');
+    const allChecked = checks.length > 0 && Array.from(checks).every(c => c.checked);
+    document.getElementById('checkSelectAll').checked = allChecked;
+    const selectedOrdersCount = document.querySelectorAll('.order-check:checked').length;
+    document.getElementById('selectedCount').textContent = '已选 ' + selectedOrdersCount + ' 张单据';
+  }
+
   function openRecordModal(rec) {
     const modal = document.getElementById('recordModal');
     document.getElementById('recModalBarcode').value = rec.barcode || '';
@@ -965,6 +1077,7 @@
         }
       });
     };
+    document.getElementById('recModalError').style.display = 'none';
     modal.classList.add('open');
   }
 
@@ -990,24 +1103,63 @@
   }
 
   // ===== Export CSV =====
-  function exportCSV() {
-    if (transfers.length === 0) { toast('暂无记录可导出', 'error'); return; }
+  function exportCSVWithData(dataList, filename) {
+    if (dataList.length === 0) { toast('暂无记录可导出', 'error'); return; }
     const h = ['序号','调拨单号','箱号','条码','商品名称','数量','单位','调出门店','调入门店','备注','录入时间'];
-    const rows = transfers.map((r,i) => [i+1, r.orderNo||'', r.boxNo||1, r.barcode, r.productName||'', r.quantity, r.unit||'个', r.fromStore||'', r.toStore||'', r.note||'', fmtDate(r.timestamp)].map(v => '"'+String(v).replace(/"/g,'""')+'"').join(','));
+    const rows = dataList.map((r,i) => [i+1, r.orderNo||'', r.boxNo||1, r.barcode, r.productName||'', r.quantity, r.unit||'个', r.fromStore||'', r.toStore||'', r.note||'', fmtDate(r.timestamp)].map(v => '"'+String(v).replace(/"/g,'""')+'"').join(','));
     const csv = '\uFEFF' + h.join(',') + '\n' + rows.join('\n');
     const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = '调拨记录_'+today()+'.csv';
+    a.href = url; a.download = filename+'.csv';
     document.body.appendChild(a); a.click();
     document.body.removeChild(a); URL.revokeObjectURL(url);
-    toast('已导出 '+transfers.length+' 条记录', 'success');
+    toast('已导出 '+dataList.length+' 条记录', 'success');
+  }
+  function exportCSV() {
+    exportCSVWithData(transfers, '调拨记录_'+today());
   }
 
   // ===== Init =====
   loadData();
   renderProducts();
   renderRecords();
+
+  // ===== 调拨基本信息弹窗 =====
+  document.getElementById('btnInfoConfirm').addEventListener('click', () => {
+    const orderNo = document.getElementById('infoOrderNo').value.trim();
+    const fromStore = document.getElementById('infoFromStore').value.trim();
+    const toStore = document.getElementById('infoToStore').value.trim();
+    const errEl = document.getElementById('infoError');
+    if (!orderNo || !fromStore || !toStore) {
+      errEl.textContent = '请填写完整信息';
+      errEl.style.display = 'block';
+      return;
+    }
+    if (fromStore === toStore) {
+      errEl.textContent = '调出门店和调入门店不能相同';
+      errEl.style.display = 'block';
+      return;
+    }
+    errEl.style.display = 'none';
+    // 填入扫码页面的字段并切换到锁定态
+    document.getElementById('inputOrderNo').value = orderNo;
+    document.getElementById('inputFromStore').value = fromStore;
+    document.getElementById('inputToStore').value = toStore;
+    document.getElementById('infoModal').classList.remove('open');
+    switchToLockedMode();
+    currentBoxNo = 1;
+    maxCreatedBoxNo = 1;
+    checkBasicInfo();
+    updateBoxUI();
+    switchTab('sectionScan');
+    toast('✅ 已设置调拨单：' + orderNo, 'success');
+  });
+
+  // 弹窗内回车确认
+  document.getElementById('infoToStore').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('btnInfoConfirm').click();
+  });
 
   // Tab switching
   document.querySelectorAll('.tab-bar button').forEach(b => {
@@ -1051,8 +1203,15 @@
     if (!currentScan) return;
     const qty = parseInt(document.getElementById('inputQuantity').value);
     if (!qty || qty < 1) return;
+    if (!currentScan.product) {
+      toast('未查到商品信息，不允许保存，请先在商品库添加该条码', 'error');
+      document.getElementById('inputQuantity').value = '';
+      currentScan = null;
+      document.getElementById('scanResult').classList.add('hidden');
+      return;
+    }
     if (currentBoxNo > 1 && getBoxSummary(1).count === 0) {
-      toast('第 1 箱暂无记录，请先在第 1 箱录入', 'error');
+      showCenterAlert('第 1 箱暂无记录，请先在第 1 箱扫码录入');
       document.getElementById('inputQuantity').value = '';
       currentScan = null;
       document.getElementById('scanResult').classList.add('hidden');
@@ -1063,7 +1222,7 @@
       orderNo: document.getElementById('inputOrderNo').value.trim(),
       boxNo: currentBoxNo,
       barcode: currentScan.barcode,
-      productName: currentScan.product ? currentScan.product.name : '（未匹配）',
+      productName: currentScan.product ? currentScan.product.name : '未查到商品信息',
       quantity: qty,
       unit: (currentScan.product && currentScan.product.unit) || '个',
       fromStore: document.getElementById('inputFromStore').value.trim(),
@@ -1088,24 +1247,95 @@
 
   // 搜索 / 筛选
   document.getElementById('inputSearchRecord').addEventListener('input', renderRecords);
-  document.getElementById('selectDateFilter').addEventListener('change', renderRecords);
+  document.getElementById('selectStoreFilter').addEventListener('change', renderRecords);
   document.getElementById('inputSearchProduct').addEventListener('input', () => renderProducts());
 
-  // 基本信息输入验证
+  // ===== 锁定/编辑基本信息切换 =====
+  document.getElementById('btnToggleEdit').addEventListener('click', () => {
+    if (isEditingInfo) {
+      // 取消编辑，恢复原始值
+      const oldOrder = document.getElementById('displayOrderNo').textContent;
+      const oldFrom = document.getElementById('displayFromStore').textContent;
+      const oldTo = document.getElementById('displayToStore').textContent;
+      document.getElementById('inputOrderNo').value = oldOrder !== '-' ? oldOrder : '';
+      document.getElementById('inputFromStore').value = oldFrom !== '-' ? oldFrom : '';
+      document.getElementById('inputToStore').value = oldTo !== '-' ? oldTo : '';
+      document.getElementById('infoEditError').style.display = 'none';
+      switchToLockedMode();
+    } else {
+      // 进入编辑态
+      document.getElementById('infoDisplay').classList.add('hidden');
+      document.getElementById('infoEdit').classList.remove('hidden');
+      document.getElementById('btnToggleEdit').textContent = '✕ 取消';
+      isEditingInfo = true;
+    }
+  });
+
+  document.getElementById('btnSaveInfoEdit').addEventListener('click', () => {
+    const orderNo = document.getElementById('inputOrderNo').value.trim();
+    const fromStore = document.getElementById('inputFromStore').value.trim();
+    const toStore = document.getElementById('inputToStore').value.trim();
+    const errEl = document.getElementById('infoEditError');
+    if (!orderNo || !fromStore || !toStore) {
+      errEl.textContent = '请填写完整信息';
+      errEl.style.display = 'block';
+      return;
+    }
+    if (fromStore === toStore) {
+      errEl.textContent = '调出门店和调入门店不能相同';
+      errEl.style.display = 'block';
+      return;
+    }
+    errEl.style.display = 'none';
+    // 判断单号是否变化 → 决定是否重置箱管理
+    const oldOrderNo = document.getElementById('displayOrderNo').textContent;
+    if (orderNo !== oldOrderNo) {
+      currentBoxNo = 1;
+      maxCreatedBoxNo = 1;
+    }
+    switchToLockedMode();
+    checkBasicInfo();
+    updateBoxUI();
+    toast('✅ 已更新', 'success');
+  });
+
+  document.getElementById('btnResetInfoEdit').addEventListener('click', () => {
+    document.getElementById('inputOrderNo').value = '';
+    document.getElementById('inputFromStore').value = '';
+    document.getElementById('inputToStore').value = '';
+    document.getElementById('infoEditError').style.display = 'none';
+    // 重置箱管理
+    currentBoxNo = 1;
+    maxCreatedBoxNo = 1;
+    updateBoxUI();
+    // 清空扫码结果
+    currentScan = null;
+    document.getElementById('scanResult').classList.add('hidden');
+    document.getElementById('inputQuantity').value = '';
+    checkBasicInfo();
+    toast('🔄 已重置，请重新填写', 'success');
+  });
+
+  // 基本信息输入验证（编辑态下不触发实时逻辑）
   document.getElementById('inputOrderNo').addEventListener('input', () => {
+    if (isEditingInfo) return;
     checkBasicInfo();
     currentBoxNo = 1;
     maxCreatedBoxNo = 1;
     updateBoxUI();
   });
-  document.getElementById('inputFromStore').addEventListener('input', checkBasicInfo);
-  document.getElementById('inputToStore').addEventListener('input', checkBasicInfo);
+  document.getElementById('inputFromStore').addEventListener('input', () => {
+    if (!isEditingInfo) checkBasicInfo();
+  });
+  document.getElementById('inputToStore').addEventListener('input', () => {
+    if (!isEditingInfo) checkBasicInfo();
+  });
 
   // ===== 箱导航事件 =====
   document.getElementById('btnNewBox').addEventListener('click', () => {
     const box1Summary = getBoxSummary(1);
     if (box1Summary.count === 0) {
-      toast('第 1 箱暂无记录，请先在第 1 箱扫码录入', 'error');
+      showCenterAlert('第 1 箱暂无记录，请先在第 1 箱扫码录入');
       return;
     }
     maxCreatedBoxNo++;
@@ -1133,6 +1363,13 @@
       toast('已是最后一箱', '');
     }
   });
+
+  // ===== 居中警告弹窗（自动消失） =====
+  function showCenterAlert(msg) {
+    document.getElementById('alertMsg').textContent = msg;
+    document.getElementById('alertPopup').classList.add('open');
+    setTimeout(() => document.getElementById('alertPopup').classList.remove('open'), 2000);
+  }
 
   // ===== 自定义确认弹窗（居中显示在手机页面） =====
   function showConfirm(opts) {
@@ -1259,7 +1496,12 @@
     const name = document.getElementById('recModalName').textContent.trim();
     const qty = parseInt(document.getElementById('recModalQty').value);
     const boxNo = parseInt(document.getElementById('recModalBox').value);
-    if (!barcode || !name || name === '-' || !qty || qty < 1) { toast('请填写完整信息', 'error'); return; }
+    if (!barcode || !name || name === '-' || name === '未查到商品信息' || !qty || qty < 1) {
+      document.getElementById('recModalError').style.display = 'block';
+      return;
+    } else {
+      document.getElementById('recModalError').style.display = 'none';
+    }
     if (!boxNo || boxNo < 1) { toast('请输入有效箱号', 'error'); return; }
     const idx = transfers.findIndex(r => r.id === id);
     if (idx >= 0) {
@@ -1279,22 +1521,21 @@
   document.getElementById('recModalBarcode').addEventListener('input', () => {
     const code = document.getElementById('recModalBarcode').value.trim();
     const matched = products.find(p => p.barcode === code);
-    document.getElementById('recModalName').textContent = matched ? matched.name : (code ? '（未匹配）' : '-');
+    document.getElementById('recModalName').textContent = matched ? matched.name : (code ? '未查到商品信息' : '-');
+    if (matched) document.getElementById('recModalError').style.display = 'none';
   });
 
-  // 更新箱号筛选选项
-  function updateBoxFilter() {
-    const sel = document.getElementById('selectBoxFilter');
+  // 更新调入门店筛选选项
+  function updateStoreFilter() {
+    const sel = document.getElementById('selectStoreFilter');
     const currentVal = sel.value;
-    const boxes = new Set();
-    transfers.forEach(r => { if (r.boxNo) boxes.add(r.boxNo); });
-    const sorted = [...boxes].sort((a,b) => a-b);
-    sel.innerHTML = '<option value="all">全部箱</option>' + sorted.map(b => '<option value="'+b+'">第'+b+'箱</option>').join('');
+    const stores = new Set();
+    transfers.forEach(r => { if (r.toStore) stores.add(r.toStore); });
+    const sorted = [...stores].sort();
+    sel.innerHTML = '<option value="all">调入门店</option>' + sorted.map(s => '<option value="'+esc(s)+'">'+esc(s)+'</option>').join('');
     sel.value = currentVal;
   }
-  document.getElementById('selectBoxFilter').addEventListener('change', renderRecords);
-
-  // 保存商品
+  document.getElementById('selectStoreFilter').addEventListener('change', renderRecords);
   document.getElementById('btnSaveProduct').addEventListener('click', () => {
     const barcode = document.getElementById('modalBarcode').value.trim();
     const name = document.getElementById('modalName').value.trim();
@@ -1332,7 +1573,38 @@
 
   // 导出 CSV
   document.getElementById('btnExport').addEventListener('click', exportCSV);
-  document.getElementById('btnExport2').addEventListener('click', exportCSV);
+
+  // 全选 / 取消全选
+  document.getElementById('checkSelectAll').addEventListener('change', (e) => {
+    const checked = e.target.checked;
+    document.querySelectorAll('.order-check').forEach(cb => cb.checked = checked);
+    document.querySelectorAll('.order-check').forEach(cb => {
+      const order = cb.dataset.order;
+      if (checked) selectedOrders.add(order);
+      else selectedOrders.delete(order);
+    });
+    updateSelectAllState();
+  });
+
+  // 单据复选框事件委托
+  document.getElementById('recordsList').addEventListener('change', (e) => {
+    if (e.target.classList.contains('order-check')) {
+      const order = e.target.dataset.order;
+      if (e.target.checked) selectedOrders.add(order);
+      else selectedOrders.delete(order);
+      updateSelectAllState();
+    }
+  });
+
+  // 导出选中
+  document.getElementById('btnExportSelected').addEventListener('click', () => {
+    const checkedOrders = new Set();
+    document.querySelectorAll('.order-check:checked').forEach(cb => checkedOrders.add(cb.dataset.order));
+    if (checkedOrders.size === 0) { toast('请先选择要导出的单据', 'error'); return; }
+    const filtered = transfers.filter(r => checkedOrders.has(r.orderNo || '（未填单号）'));
+    if (filtered.length === 0) { toast('所选单据无记录', 'error'); return; }
+    exportCSVWithData(filtered, '调拨记录_选中_'+today());
+  });
 
   // 清空记录
   document.getElementById('btnClearRecords').addEventListener('click', () => {
@@ -1378,6 +1650,15 @@
     }
   }, 1000);
 
+  // 事件委托：记录列表点击编辑
+  document.getElementById('recordsList').addEventListener('click', (e) => {
+    const item = e.target.closest('.record-item');
+    if (item) {
+      const rec = transfers.find(r => r.id === item.dataset.id);
+      if (rec) openRecordModal(rec);
+    }
+  });
+
   // 手动输入条码
   document.getElementById('btnManualMatch').addEventListener('click', () => {
     const code = document.getElementById('manualBarcode').value.trim();
@@ -1391,7 +1672,7 @@
     if (matched) {
       document.getElementById('scanProductName').textContent = matched.name;
     } else {
-      document.getElementById('scanProductName').textContent = '（未匹配到商品）';
+      document.getElementById('scanProductName').textContent = '未查到商品信息';
       toast('⚠️ 该条码未匹配到商品，请先在商品库添加', '');
     }
     document.getElementById('scanBoxNo').textContent = '第 ' + currentBoxNo + ' 箱';
@@ -1410,6 +1691,11 @@
     }
   });
 
+  // 自动弹出调拨基本信息弹窗
+  setTimeout(() => {
+    document.getElementById('infoModal').classList.add('open');
+    document.getElementById('infoOrderNo').focus();
+  }, 300);
   // 初始检查基本信息状态
   checkBasicInfo();
   updateBoxUI();
