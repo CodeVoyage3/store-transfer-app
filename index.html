@@ -401,7 +401,10 @@
       </label>
       <span id="selectedCount" style="font-size:12px;color:#9CA3AF;flex:1;">已选 0 张单据</span>
       <button id="btnExportSelected" class="btn btn-sm btn-outline" style="gap:4px;padding:4px 10px;font-size:11px;color:#059669;border-color:#059669;">
-        📤 导出选中
+        📤 分享
+      </button>
+      <button id="btnDownloadSelected" class="btn btn-sm btn-outline" style="gap:4px;padding:4px 10px;font-size:11px;color:#374151;border-color:#D1D5DB;">
+        📥 下载
       </button>
     </div>
     <div class="flex-row" style="margin-bottom:10px;gap:6px;">
@@ -1224,9 +1227,10 @@
     const blob = new Blob([wbout], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     const file = new File([blob], filename+'.xlsx', {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
 
+    // 【分享】尝试系统分享（钉钉可能不支持文件，微信正常）
     if (navigator.share && navigator.canShare && navigator.canShare({files: [file]})) {
       navigator.share({ files: [file], title: '门店调拨单' })
-        .then(() => toast('已分享 '+dataList.length+' 条记录', 'success'))
+        .then(() => toast('已分享', 'success'))
         .catch(err => {
           if (err.name !== 'AbortError') {
             fallbackDownload(blob, filename, dataList.length);
@@ -1235,6 +1239,37 @@
     } else {
       fallbackDownload(blob, filename, dataList.length);
     }
+  }
+  // 【下载】直接下载文件到本地
+  function downloadCSVWithData(dataList, filename) {
+    if (dataList.length === 0) { toast('暂无记录可下载', 'error'); return; }
+    const h = ['门店调拨单号','货源门店','目标门店','创建时间','调拨类型','门店入库单号','备注','商品条形码','商品名称','实调数量','总计','仓库','箱号'];
+    const exportTime = nowStr();
+    const csvRows = [];
+    const groups = {};
+    dataList.forEach(r => {
+      const key = r.orderNo || '（未填单号）';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(r);
+    });
+    // 简单平铺导出（不合并单元格，兼容CSV）
+    csvRows.push(h.map(v => '"'+v+'"').join(','));
+    Object.keys(groups).forEach(orderNo => {
+      const items = groups[orderNo].sort((a, b) => (a.boxNo||1) - (b.boxNo||1));
+      const first = items[0];
+      const totalQty = items.reduce((s, r) => s + (parseInt(r.quantity) || 0), 0);
+      items.forEach(r => {
+        csvRows.push([
+          orderNo, first.fromStore||'', first.toStore||'', exportTime,
+          first.transferType||'调拨出库', first.inboundNo||'', first.note||'',
+          r.barcode||'', r.productName||'', parseInt(r.quantity)||0,
+          totalQty, (first.fromStore||'')+'正常仓', '第'+(r.boxNo||1)+'箱'
+        ].map(v => '"'+String(v).replace(/"/g,'""')+'"').join(','));
+      });
+    });
+    const csv = '\uFEFF' + csvRows.join('\n');
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    fallbackDownload(blob, filename, dataList.length);
   }
   function fallbackDownload(blob, filename, count) {
     const url = URL.createObjectURL(blob);
@@ -1735,6 +1770,16 @@
     const filtered = transfers.filter(r => checkedOrders.has(r.orderNo || '（未填单号）'));
     if (filtered.length === 0) { toast('所选单据无记录', 'error'); return; }
     exportCSVWithData(filtered, '调拨记录_选中_'+today());
+  });
+
+  // 下载选中（直接下载CSV）
+  document.getElementById('btnDownloadSelected').addEventListener('click', () => {
+    const checkedOrders = new Set();
+    document.querySelectorAll('.order-check:checked').forEach(cb => checkedOrders.add(cb.dataset.order));
+    if (checkedOrders.size === 0) { toast('请先选择要导出的单据', 'error'); return; }
+    const filtered = transfers.filter(r => checkedOrders.has(r.orderNo || '（未填单号）'));
+    if (filtered.length === 0) { toast('所选单据无记录', 'error'); return; }
+    downloadCSVWithData(filtered, '调拨记录_选中_'+today());
   });
 
   // 清空记录
