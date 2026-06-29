@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#4F46E5">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>门店调拨 - 离线版</title>
+  <style>
+    * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { overscroll-behavior: none; height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: #F9FAFB; color: #1F2937;
+    }
+    .header {
+      background: #4F46E5; color: white; padding: 14px 16px;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 50;
+      box-shadow: 0 2px 8px rgba(79,70,229,0.3);
+    }
+    .tab-bar {
+      background: white; border-top: 1px solid #E5E7EB;
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+      display: flex;
+    }
+    .tab-bar button {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      padding: 8px 0 10px; border: none; background: none; cursor: pointer;
+      color: #9CA3AF; font-size: 11px; gap: 1px;
+    }
+    .tab-bar button.active { color: #4F46E5; font-weight: 600; }
+    .tab-bar button.active .tab-line { background: #4F46E5; }
+    .tab-line {
+      width: 24px; height: 2px; border-radius: 2px; background: transparent;
+      margin-top: 2px; transition: background 0.2s;
+    }
+    .main { padding-bottom: 64px; }
+    .section { display: none; padding: 12px; }
+    .section.active { display: block; }
+    .card {
+      background: white; border-radius: 14px; padding: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.07); margin-bottom: 12px;
+    }
+    .btn {
+      background: #4F46E5; color: white; border: none; border-radius: 12px;
+      padding: 12px 20px; font-size: 15px; font-weight: 600; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      width: 100%; transition: transform 0.15s, opacity 0.15s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.4; cursor: default; transform: none; }
+    .btn-sm { padding: 8px 14px; font-size: 13px; width: auto; border-radius: 10px; }
+    .btn-outline {
+      background: transparent; border: 1.5px solid #4F46E5; color: #4F46E5;
+    }
+    .btn-danger { background: #EF4444; }
+    .btn-green { background: #059669; }
+    .input {
+      width: 100%; border: 1.5px solid #E5E7EB; border-radius: 10px;
+      padding: 10px 14px; font-size: 14px; background: #F9FAFB;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .input:focus { border-color: #4F46E5; background: white; box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
+    label { display: block; font-size: 12px; color: #6B7280; margin-bottom: 4px; font-weight: 500; }
+    .badge {
+      display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 500;
+      background: #EEF2FF; color: #4F46E5;
+    }
+    .badge-green { background: #D1FAE5; color: #059669; }
+    .badge-yellow { background: #FEF3C7; color: #D97706; }
+    .toast {
+      position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 999;
+      padding: 10px 20px; border-radius: 10px; color: white; font-size: 14px; font-weight: 500;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2); opacity: 0; transition: opacity 0.3s; pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+    .empty { text-align: center; padding: 40px 20px; color: #9CA3AF; }
+    .empty svg { margin: 0 auto 12px; display: block; }
+    .record-item {
+      border-left: 4px solid #4F46E5; background: white; border-radius: 12px;
+      padding: 12px 14px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .flex-row { display: flex; align-items: center; gap: 8px; }
+    .flex-between { display: flex; align-items: center; justify-content: space-between; }
+    .product-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #F3F4F6; }
+    .product-item:last-child { border-bottom: none; }
+    .search-box { background: #F3F4F6; border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .search-box input { background: none; border: none; flex: 1; font-size: 14px; outline: none; }
+    .modal {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+      display: none; align-items: center; justify-content: center; padding: 20px; z-index: 100;
+    }
+    .modal.open { display: flex; }
+    .modal-box {
+      background: white; border-radius: 18px; width: 100%; max-width: 380px;
+      padding: 24px; max-height: 85vh; overflow-y: auto;
+      animation: modalIn 0.25s ease-out;
+    }
+    @keyframes modalIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    select { padding: 10px 14px; border: 1.5px solid #E5E7EB; border-radius: 10px; font-size: 14px; background: #F9FAFB; }
+    .ico { width: 20px; height: 20px; display: inline-block; vertical-align: middle; }
+    .ico-sm { width: 16px; height: 16px; }
+    .trash-btn { background: none; border: none; color: #EF4444; cursor: pointer; padding: 6px; border-radius: 8px; }
+    .trash-btn:hover { background: #FEF2F2; }
+    .edit-btn { background: none; border: none; color: #4F46E5; cursor: pointer; padding: 6px; border-radius: 8px; }
+    .edit-btn:hover { background: #EEF2FF; }
+    .text-xs { font-size: 12px; }
+    .text-sm { font-size: 13px; }
+    .text-gray { color: #6B7280; }
+    .text-gray2 { color: #9CA3AF; }
+    .font-mono { font-family: "SF Mono", Monaco, "Cascadia Code", monospace; }
+    .mt-1 { margin-top: 4px; }
+    .mt-2 { margin-top: 8px; }
+    .mt-3 { margin-top: 12px; }
+    .mb-2 { margin-bottom: 8px; }
+    .mb-3 { margin-bottom: 12px; }
+    .gap-1 { gap: 4px; }
+    .gap-2 { gap: 8px; }
+    .gap-3 { gap: 12px; }
+    .flex { display: flex; }
+    .flex-1 { flex: 1; }
+    .items-center { align-items: center; }
+    .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .hidden { display: none !important; }
+    .w-full { width: 100%; }
+    .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+    /* ===== 扫码图标 ===== */
+    .scan-icon-wrapper {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 28px 0 24px;
+    }
+    .scan-icon-btn {
+      width: 84px; height: 84px; border-radius: 50%;
+      background: linear-gradient(135deg, #4F46E5, #7C3AED);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; border: none;
+      box-shadow: 0 6px 24px rgba(79,70,229,0.35);
+      transition: transform 0.2s, opacity 0.2s, box-shadow 0.2s;
+      position: relative;
+    }
+    .scan-icon-btn::after {
+      content: ''; position: absolute; inset: -4px; border-radius: 50%;
+      border: 2px solid rgba(79,70,229,0.2);
+      animation: scanPulse 2s ease-in-out infinite;
+    }
+    @keyframes scanPulse {
+      0%, 100% { transform: scale(1); opacity: 0.5; }
+      50% { transform: scale(1.08); opacity: 0; }
+    }
+    .scan-icon-btn.disabled {
+      background: #D1D5DB; box-shadow: none; cursor: not-allowed;
+    }
+    .scan-icon-btn.disabled::after { display: none; }
+    .scan-icon-btn:active:not(.disabled) { transform: scale(0.93); }
+    .scan-icon-text { margin-top: 10px; font-size: 14px; color: #6B7280; font-weight: 500; }
+    .scan-icon-sub { font-size: 12px; color: #9CA3AF; margin-top: 2px; }
+
+    /* ===== 全屏相机覆盖层 ===== */
+    .scanner-overlay-full {
+      position: absolute; inset: 0; z-index: 200;
+      background: #000; display: none; flex-direction: column;
+    }
+    .scanner-overlay-full.open { display: flex; }
+    .scanner-topbar {
+      background: rgba(0,0,0,0.65); color: white; padding: 10px 16px;
+      display: flex; align-items: center; justify-content: space-between; z-index: 10;
+    }
+    .scanner-topbar .title { font-size: 16px; font-weight: 600; }
+    .scanner-topbar button {
+      background: rgba(255,255,255,0.15); border: none; color: white;
+      padding: 6px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500;
+    }
+    .scanner-topbar button:active { background: rgba(255,255,255,0.25); }
+    .scanner-view {
+      flex: 1; position: relative; overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .scanner-view video { width: 100%; height: 100%; object-fit: cover; }
+    .scanner-frame {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+      width: 70%; height: 30%; border: 2.5px dashed rgba(255,255,255,0.4);
+      border-radius: 16px; pointer-events: none;
+    }
+    .scanner-scanline {
+      position: absolute; left: 16%; right: 16%; height: 2px;
+      background: linear-gradient(90deg, transparent, #7C3AED, #10B981, #7C3AED, transparent);
+      box-shadow: 0 0 16px rgba(124,58,237,0.6);
+      animation: scanMove 2s ease-in-out infinite;
+      pointer-events: none;
+    }
+    @keyframes scanMove {
+      0%, 100% { top: 22%; }
+      50% { top: 67%; }
+    }
+    .scanner-hint-full {
+      position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.55); color: white; font-size: 13px;
+      padding: 6px 18px; border-radius: 20px; white-space: nowrap;
+    }
+    .scanner-loading {
+      position: absolute; inset: 0; z-index: 5;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: #111827; cursor: pointer;
+    }
+    .scanner-loading.hidden { display: none; }
+    .scanner-loading-icon {
+      width: 60px; height: 60px; border-radius: 50%; background: #4F46E5;
+      display: flex; align-items: center; justify-content: center; margin-bottom: 12px;
+      box-shadow: 0 4px 20px rgba(79,70,229,0.4);
+    }
+    .scanner-loading-text { color: white; font-size: 15px; font-weight: 600; }
+    .scanner-loading-sub { color: #9CA3AF; font-size: 12px; margin-top: 4px; }
+
+    /* ===== 手动匹配结果 ===== */
+    #manualMatchResult { margin-top: 8px; padding: 6px 10px; border-radius: 8px; }
+    #manualMatchResult.warn { background: #FEF3C7; color: #D97706; }
+    #manualMatchResult.ok { background: #D1FAE5; color: #059669; }
+
+    /* ===== PC端手机容器 ===== */
+    @media (min-width: 600px) {
+      body { background: #E5E7EB; display: flex; align-items: center; justify-content: center; }
+      .phone-frame {
+        width: 420px; height: 100vh; max-height: 800px; margin: 20px auto;
+        background: #F9FAFB; border-radius: 36px; box-shadow: 0 20px 60px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05);
+        overflow: hidden; position: relative;
+        display: flex; flex-direction: column;
+      }
+      .phone-frame .header { border-radius: 36px 36px 0 0; flex-shrink: 0; }
+      .phone-frame .main { flex: 1; overflow-y: auto; padding-bottom: 0; }
+      .phone-frame .tab-bar { position: static; border-radius: 0 0 36px 36px; flex-shrink: 0; }
+    }
+    @media (max-width: 599px) {
+      .phone-frame { width: 100%; height: 100%; }
+    }
+
+    /* ===== 自定义确认弹窗 ===== */
+    .confirm-overlay {
+      position: absolute; inset: 0; background: rgba(0,0,0,0.5);
+      display: none; align-items: center; justify-content: center; z-index: 300;
+      padding: 24px;
+    }
+    .confirm-overlay.open { display: flex; }
+    .confirm-box {
+      background: white; border-radius: 20px; width: 100%; max-width: 320px;
+      padding: 28px 24px 20px; text-align: center;
+      animation: modalIn 0.25s ease-out;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+    }
+    .confirm-icon {
+      width: 48px; height: 48px; border-radius: 50%;
+      background: #FEF2F2; color: #EF4444;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 12px; font-size: 24px;
+    }
+    .confirm-title { font-size: 16px; font-weight: 700; color: #1F2937; margin-bottom: 8px; }
+    .confirm-msg { font-size: 14px; color: #6B7280; line-height: 1.5; margin-bottom: 20px; }
+    .confirm-btns { display: flex; gap: 10px; }
+    .confirm-btns button {
+      flex: 1; padding: 11px 0; border-radius: 12px; font-size: 15px; font-weight: 600;
+      border: none; cursor: pointer; transition: transform 0.15s;
+    }
+    .confirm-btns button:active { transform: scale(0.96); }
+    .confirm-btn-cancel { background: #F3F4F6; color: #6B7280; }
+    .confirm-btn-danger { background: #EF4444; color: white; }
+  </style>
+  <script src="quagga.min.js"></script>
+  <script src="xlsx.core.min.js"></script>
+</head>
+<body>
+<div class="phone-frame">
+
+<div id="toast" class="toast"></div>
+
+<!-- Header -->
+<div class="header">
+  <div class="flex-row">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M12 22V12"/><path d="M3.3 7l8.7 5 8.7-5"/></svg>
+    <span style="font-size:17px;font-weight:700;">门店调拨</span>
+    <span id="storageStatus" style="font-size:10px;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,0.2);color:white;">检查中...</span>
+  </div>
+  <div class="flex-row" style="gap:4px;">
+    <button id="btnSaveData" style="background:rgba(255,255,255,0.15);border:none;color:white;cursor:pointer;padding:4px 6px;border-radius:8px;font-size:11px;" title="手动备份数据到文件">💾 存</button>
+    <button id="btnLoadData" style="background:rgba(255,255,255,0.15);border:none;color:white;cursor:pointer;padding:4px 6px;border-radius:8px;font-size:11px;" title="从文件恢复数据">📂 取</button>
+    <button id="btnExport" style="background:none;border:none;color:white;cursor:pointer;padding:4px 6px;border-radius:8px;" title="导出CSV">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    </button>
+  </div>
+</div>
+
+<div class="main" id="app">
+
+  <!-- ===== 扫码页 ===== -->
+  <div id="sectionScan" class="section active">
+
+    <!-- ① 调拨基本信息 -->
+    <div class="card">
+      <div style="font-size:14px;font-weight:700;color:#374151;margin-bottom:12px;">📋 调拨基本信息</div>
+      <div class="mb-2"><label>调拨单号 *</label><input id="inputOrderNo" class="input" placeholder="如：DB20240601-001" /></div>
+      <div class="grid-2 mb-2">
+        <div><label>调出门店 *</label><input id="inputFromStore" class="input" placeholder="如：总仓" /></div>
+        <div><label>调入门店 *</label><input id="inputToStore" class="input" placeholder="如：A分店" /></div>
+      </div>
+    </div>
+
+    <!-- ② 扫码图标 -->
+    <div class="card" style="padding:12px 16px;">
+      <div class="scan-icon-wrapper">
+        <button class="scan-icon-btn disabled" id="btnOpenScanner">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round">
+            <path d="M1 4h3m-3 16h3M20 4h3m-3 16h3"/>
+            <rect x="4" y="4" width="16" height="16" rx="2"/>
+            <line x1="9" y1="8" x2="15" y2="8"/>
+            <circle cx="12" cy="13" r="3.5"/>
+          </svg>
+        </button>
+        <div class="scan-icon-text" id="scanIconText">请先填写基本信息</div>
+        <div class="scan-icon-sub" id="scanIconSub">填写完毕后可扫码</div>
+      </div>
+    </div>
+
+    <!-- ③ 扫码结果 -->
+    <div id="scanResult" class="card hidden">
+      <div class="flex-between mb-2">
+        <span style="font-size:13px;font-weight:600;color:#059669;">✅ 扫码成功</span>
+        <button id="btnClearScan" style="background:none;border:none;color:#9CA3AF;cursor:pointer;padding:4px;">✕</button>
+      </div>
+      <div class="grid-2 mb-2">
+        <div><label>条码</label><div id="scanBarcode" class="text-sm font-mono" style="font-weight:500;">-</div></div>
+        <div><label>匹配状态</label><div id="matchStatus"><span class="badge badge-yellow">未匹配</span></div></div>
+      </div>
+      <div class="mb-2"><label>商品名称</label><div id="scanProductName" style="font-size:15px;font-weight:600;">-</div></div>
+      <div class="grid-2 mb-2">
+        <div><label>数量 *</label><input id="inputQuantity" type="number" min="1" step="1" class="input" placeholder="0" /></div>
+        <div><label>单位</label><input id="inputUnit" class="input" placeholder="个/箱/瓶" value="个" /></div>
+      </div>
+      <div class="mb-2"><label>备注</label><input id="inputNote" class="input" placeholder="批次、保质期等" /></div>
+      <button id="btnConfirm" class="btn" disabled>✓ 确认调拨</button>
+    </div>
+
+    <!-- ④ 手动输入条码 -->
+    <div class="card">
+      <div style="font-size:13px;font-weight:600;color:#6B7280;margin-bottom:8px;">⌨️ 手动输入条码</div>
+      <div class="flex-row gap-2">
+        <input id="manualBarcode" class="input" placeholder="输入条码后点匹配" style="flex:1;" />
+        <button id="btnManualMatch" class="btn btn-sm" style="width:auto;flex-shrink:0;padding:10px 16px;">匹配</button>
+      </div>
+      <div id="manualMatchResult" class="hidden"></div>
+    </div>
+
+    <div style="text-align:center;font-size:11px;color:#9CA3AF;margin-top:8px;">
+      💾 <span id="autoSaveHint">数据自动存到手机本地</span> · 记得右上角「💾存」手动备份
+    </div>
+  </div>
+
+  <!-- ===== 记录页 ===== -->
+  <div id="sectionRecords" class="section">
+    <div class="flex-between mb-2">
+      <div style="font-size:15px;font-weight:700;color:#374151;">📋 调拨记录</div>
+      <div class="flex-row">
+        <span id="recordCount" style="font-size:12px;color:#9CA3AF;">共 0 条</span>
+        <button id="btnExport2" class="btn btn-sm btn-outline" style="gap:4px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          导出
+        </button>
+      </div>
+    </div>
+    <div class="flex-row" style="margin-bottom:10px;gap:6px;">
+      <div class="search-box" style="flex:1;margin-bottom:0;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="inputSearchRecord" placeholder="搜索商品/条码/门店..." />
+      </div>
+      <select id="selectDateFilter" style="border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 10px;font-size:13px;background:white;">
+        <option value="all">全部</option>
+        <option value="today">今天</option>
+        <option value="week">本周</option>
+        <option value="month">本月</option>
+      </select>
+    </div>
+    <div id="recordsList"></div>
+  </div>
+
+  <!-- ===== 商品库页 ===== -->
+  <div id="sectionProducts" class="section">
+    <div class="flex-between mb-2">
+      <div style="font-size:15px;font-weight:700;color:#374151;">📦 商品库</div>
+      <div class="flex-row gap-1">
+        <button id="btnImportExcel" class="btn btn-sm btn-outline" style="gap:4px;color:#059669;border-color:#059669;">📊 导入</button>
+        <button id="btnImportDemo" class="btn btn-sm btn-outline" style="gap:4px;">示例</button>
+        <button id="btnAddProduct" class="btn btn-sm" style="width:auto;gap:4px;">+ 添加</button>
+        <button id="btnClearProducts" class="btn btn-sm btn-outline" style="gap:4px;color:#EF4444;border-color:#EF4444;">🗑 清空</button>
+      </div>
+    </div>
+    <div class="search-box">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="inputSearchProduct" placeholder="搜索商品名称或条码..." />
+      <span id="productCount" style="font-size:12px;color:#9CA3AF;"></span>
+    </div>
+    <div id="productsList" class="card" style="padding:0 16px;"></div>
+  </div>
+</div>
+
+<!-- Tab Bar -->
+<div class="tab-bar safe-bottom">
+  <button id="tabScan" class="active" data-section="sectionScan">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 4h3m-3 16h3M20 4h3m-3 16h3"/><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="9" y1="8" x2="15" y2="8"/></svg>
+    <span>扫码</span>
+    <div class="tab-line"></div>
+  </button>
+  <button id="tabRecords" data-section="sectionRecords">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+    <span>记录</span>
+    <div class="tab-line"></div>
+  </button>
+  <button id="tabProducts" data-section="sectionProducts">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+    <span>商品库</span>
+    <div class="tab-line"></div>
+  </button>
+</div>
+
+<!-- ===== 全屏相机覆盖层 ===== -->
+<div id="scannerOverlay" class="scanner-overlay-full">
+  <div class="scanner-topbar">
+    <button id="btnCloseScanner">✕ 关闭</button>
+    <span class="title">扫描条码</span>
+    <button id="btnToggleCam2">🔄 切换</button>
+  </div>
+  <div class="scanner-view" id="scannerView">
+    <video id="video" autoplay playsinline muted></video>
+    <div class="scanner-frame"></div>
+    <div class="scanner-scanline"></div>
+    <div class="scanner-hint-full" id="scanHintFull">📷 将条码对准框内</div>
+    <div class="scanner-loading" id="scannerLoading">
+      <div class="scanner-loading-icon">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      </div>
+      <div class="scanner-loading-text">点击启动相机</div>
+      <div class="scanner-loading-sub">需授予摄像头权限</div>
+    </div>
+  </div>
+</div>
+
+<!-- Product Modal -->
+<div id="productModal" class="modal">
+  <div class="modal-box">
+    <div class="flex-between mb-3">
+      <span id="modalTitle" style="font-size:17px;font-weight:700;">添加商品</span>
+      <button class="modalClose" style="background:none;border:none;font-size:22px;color:#9CA3AF;cursor:pointer;">✕</button>
+    </div>
+    <div class="mb-2"><label>条码 *</label><input id="modalBarcode" class="input" placeholder="扫描或手动输入" /></div>
+    <div class="mb-2"><label>商品名称 *</label><input id="modalName" class="input" placeholder="输入商品名称" /></div>
+    <div class="grid-2 mb-2">
+      <div><label>单位</label><input id="modalUnit" class="input" value="个" /></div>
+      <div><label>规格</label><input id="modalSpec" class="input" placeholder="如：500ml" /></div>
+    </div>
+    <input type="hidden" id="modalEditId" />
+    <div class="flex-row gap-2 mt-2">
+      <button id="btnDeleteProduct" class="btn btn-sm btn-danger" style="display:none;flex:1;">删除</button>
+      <button id="btnSaveProduct" class="btn btn-sm btn-green" style="flex:1;">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 确认弹窗 ===== -->
+<div id="confirmModal" class="confirm-overlay">
+  <div class="confirm-box">
+    <div class="confirm-icon">⚠️</div>
+    <div class="confirm-title" id="confirmTitle">确认操作</div>
+    <div class="confirm-msg" id="confirmMsg">确定要执行此操作吗？</div>
+    <div class="confirm-btns">
+      <button class="confirm-btn-cancel" id="confirmCancel">取消</button>
+      <button class="confirm-btn-danger" id="confirmOk">确认</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ===== 存储 =====
+  const KEY_PRODUCTS = 'st_products';
+  const KEY_TRANSFERS = 'st_transfers';
+  let products = [], transfers = [];
+  let currentScan = null;
+  let mediaStream = null;
+  let scanTimer = null;
+  let isScanning = false;
+  let barcodeDetector = null;
+  let storageOk = false;
+  // 是否使用后置摄像头
+  let useBackCamera = true;
+
+  function trySave(key, data) {
+    try {
+      localStorage.setItem(key, JSON.stringify(data));
+      storageOk = true;
+      updateStorageStatus();
+      return true;
+    } catch(e) {
+      storageOk = false;
+      updateStorageStatus();
+      return false;
+    }
+  }
+  function tryLoad(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw !== null) {
+        storageOk = true;
+        updateStorageStatus();
+        return JSON.parse(raw);
+      }
+    } catch(e) {}
+    return null;
+  }
+  function updateStorageStatus() {
+    const el = document.getElementById('storageStatus');
+    if (el) {
+      el.textContent = storageOk ? '💾 自动保存' : '⚠️ 手动存';
+      el.style.background = storageOk ? 'rgba(16,185,129,0.2)' : 'rgba(245,158,11,0.2)';
+      el.style.color = storageOk ? '#059669' : '#D97706';
+    }
+  }
+
+  function loadData() {
+    let p = tryLoad(KEY_PRODUCTS);
+    let t = tryLoad(KEY_TRANSFERS);
+    products = p || [];
+    transfers = t || [];
+  }
+  function saveProducts() {
+    if (!trySave(KEY_PRODUCTS, products)) {
+      toast('⚠️ 无法自动保存，请用「💾存」手动备份', 'error');
+    }
+  }
+  function saveTransfers() {
+    if (!trySave(KEY_TRANSFERS, transfers)) {
+      toast('⚠️ 无法自动保存，请用「💾存」手动备份', 'error');
+    }
+  }
+
+  // ===== 手动存/取 =====
+  function exportAllData() {
+    const data = { products, transfers, exportedAt: new Date().toISOString() };
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = '门店调拨数据_'+today()+'.json';
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+    toast('✅ 数据已导出到文件', 'success');
+  }
+
+  function importAllData() {
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = '.json';
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const data = JSON.parse(ev.target.result);
+          if (data.products) products = data.products;
+          if (data.transfers) transfers = data.transfers;
+          trySave(KEY_PRODUCTS, products);
+          trySave(KEY_TRANSFERS, transfers);
+          renderProducts(); renderRecords();
+          toast('✅ 已恢复 '+products.length+' 个商品 + '+transfers.length+' 条记录', 'success');
+        } catch(err) {
+          toast('❌ 文件格式错误', 'error');
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }
+
+  let toastTimer=null;
+  function toast(msg, type) {
+    const el=document.getElementById('toast');
+    el.textContent=msg;
+    el.style.background=type==='success'?'#059669':type==='error'?'#DC2626':'#1F2937';
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer=setTimeout(()=>el.classList.remove('show'),2500);
+  }
+
+  function esc(s) { if(!s)return''; const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+  function today() {
+    const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+  function fmtDate(iso) {
+    if(!iso)return''; const d=new Date(iso);
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  }
+  function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2,4); }
+  function weekStart() { const d=new Date(); d.setDate(d.getDate()-d.getDay()); d.setHours(0,0,0,0); return d.toISOString(); }
+  function monthStart() { const d=new Date(); d.setDate(1); d.setHours(0,0,0,0); return d.toISOString(); }
+
+  // ===== 基本信息验证 =====
+  function checkBasicInfo() {
+    const orderNo = document.getElementById('inputOrderNo').value.trim();
+    const fromStore = document.getElementById('inputFromStore').value.trim();
+    const toStore = document.getElementById('inputToStore').value.trim();
+    const ok = orderNo && fromStore && toStore;
+    const btn = document.getElementById('btnOpenScanner');
+    const text = document.getElementById('scanIconText');
+    const sub = document.getElementById('scanIconSub');
+    if (ok) {
+      btn.classList.remove('disabled');
+      text.textContent = '📷 点击扫码';
+      text.style.color = '#4F46E5';
+      sub.textContent = '扫描条码录入商品';
+      sub.style.color = '#9CA3AF';
+    } else {
+      btn.classList.add('disabled');
+      text.textContent = '请先填写基本信息';
+      text.style.color = '#6B7280';
+      sub.textContent = '填写完毕后可扫码';
+      sub.style.color = '#9CA3AF';
+    }
+  }
+
+  // ===== 扫码引擎 =====
+  async function initBarcodeDetector() {
+    if ('BarcodeDetector' in window) {
+      const formats = ['code_128','ean_13','ean_8','upc_a','upc_e','code_39','code_93','itf','qr_code'];
+      try {
+        const supported = await BarcodeDetector.getSupportedFormats();
+        const available = formats.filter(f => supported.includes(f));
+        if (available.length > 0) {
+          barcodeDetector = new BarcodeDetector({ formats: available });
+          return true;
+        }
+      } catch(e) {}
+    }
+    if (typeof Quagga !== 'undefined') {
+      return true;
+    }
+    return false;
+  }
+
+  // ===== 打开全屏相机 =====
+  async function openScanner() {
+    const overlay = document.getElementById('scannerOverlay');
+    const loading = document.getElementById('scannerLoading');
+    const hint = document.getElementById('scanHintFull');
+
+    overlay.classList.add('open');
+
+    if (!mediaStream) {
+      // 第一次：显示启动覆盖层，需要用户点击
+      loading.classList.remove('hidden');
+      hint.textContent = '📷 点击启动相机';
+    } else {
+      // 已有摄像头流：直接显示
+      loading.classList.add('hidden');
+      const video = document.getElementById('video');
+      video.srcObject = mediaStream;
+      try { await video.play(); } catch(e) {}
+      hint.textContent = '📷 扫描中...';
+      startScanning();
+    }
+  }
+
+  // 启动覆盖层点击 → 正式启动摄像头
+  document.getElementById('scannerLoading').addEventListener('click', async () => {
+    const loading = document.getElementById('scannerLoading');
+    const hint = document.getElementById('scanHintFull');
+    loading.querySelector('.scanner-loading-text').textContent = '启动中...';
+    hint.textContent = '⏳ 正在请求摄像头...';
+
+    const ok = await startCamera();
+    if (!ok) {
+      loading.querySelector('.scanner-loading-text').textContent = '❌ 摄像头授权失败';
+      loading.querySelector('.scanner-loading-sub').textContent = '请在系统设置中允许摄像头权限';
+      hint.textContent = '⚠️ 摄像头访问被拒绝';
+      return;
+    }
+
+    loading.classList.add('hidden');
+    hint.textContent = '📷 扫描中...';
+    startScanning();
+  });
+
+  async function startCamera() {
+    try {
+      const video = document.getElementById('video');
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: useBackCamera ? 'environment' : 'user', width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+      video.srcObject = mediaStream;
+      await video.play();
+      return true;
+    } catch(e) {
+      return false;
+    }
+  }
+
+  function stopCamera() {
+    if (mediaStream) {
+      mediaStream.getTracks().forEach(t => t.stop());
+      mediaStream = null;
+    }
+    if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
+    isScanning = false;
+    barcodeDetector = null;
+  }
+
+  function startScanning() {
+    if (isScanning) return;
+    isScanning = true;
+
+    if (barcodeDetector && mediaStream) {
+      const video = document.getElementById('video');
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      scanTimer = setInterval(async () => {
+        if (!isScanning || !video.videoWidth) return;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0);
+        try {
+          const results = await barcodeDetector.detect(canvas);
+          if (results.length > 0 && results[0].rawValue) {
+            const code = results[0].rawValue;
+            if (currentScan && currentScan.barcode === code) return;
+            onBarcodeDetected(code);
+          }
+        } catch(e) {}
+      }, 400);
+    } else {
+      // Quagga 引擎
+      document.getElementById('scanHintFull').textContent = '📷 Quagga 扫描中...';
+      const video = document.getElementById('video');
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      let decoding = false;
+      scanTimer = setInterval(() => {
+        if (!isScanning || !video.videoWidth || decoding) return;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0);
+        decoding = true;
+        canvas.toBlob((blob) => {
+          const url = URL.createObjectURL(blob);
+          Quagga.decodeSingle({
+            src: url, locate: true,
+            decoder: { readers: ['ean_reader','ean_8_reader','code_128_reader','code_39_reader','upc_reader'] }
+          }, (r) => {
+            URL.revokeObjectURL(url); decoding = false;
+            if (r && r.codeResult && r.codeResult.code) {
+              const code = r.codeResult.code;
+              if (currentScan && currentScan.barcode === code) return;
+              clearInterval(scanTimer); scanTimer = null;
+              onBarcodeDetected(code);
+            }
+          });
+        }, 'image/jpeg', 0.8);
+      }, 1200);
+    }
+  }
+
+  function onBarcodeDetected(code) {
+    try { navigator.vibrate(100); } catch(e) {}
+    try {
+      const ac = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ac.createOscillator();
+      const g = ac.createGain();
+      osc.connect(g); g.connect(ac.destination);
+      osc.frequency.value = 1200; g.gain.value = 0.1;
+      osc.start(); setTimeout(() => { osc.stop(); ac.close(); }, 120);
+    } catch(e) {}
+
+    isScanning = false;
+    if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
+
+    // 关闭全屏相机覆盖层（但不停止摄像头流，实现一次性授权）
+    document.getElementById('scannerOverlay').classList.remove('open');
+
+    const matched = products.find(p => p.barcode === code);
+    currentScan = { barcode: code, product: matched || null };
+
+    const r = document.getElementById('scanResult');
+    r.classList.remove('hidden');
+    document.getElementById('scanBarcode').textContent = code;
+    document.getElementById('scanProductName').textContent = matched ? matched.name : '（未匹配到商品）';
+    document.getElementById('matchStatus').innerHTML = matched
+      ? '<span class="badge badge-green">✓ 已匹配</span>'
+      : '<span class="badge badge-yellow">! 未匹配</span>';
+    if (matched && matched.unit) document.getElementById('inputUnit').value = matched.unit;
+    checkConfirm();
+    setTimeout(() => document.getElementById('inputQuantity').focus(), 300);
+  }
+
+  function checkConfirm() {
+    const q = document.getElementById('inputQuantity').value;
+    document.getElementById('btnConfirm').disabled = !currentScan || !q || parseInt(q) < 1;
+  }
+
+  // ===== 关闭全屏扫码 =====
+  function closeScanner() {
+    document.getElementById('scannerOverlay').classList.remove('open');
+    // 不停止 mediaStream — 保持摄像头连接，下次直接使用
+    if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
+    isScanning = false;
+  }
+
+  // ===== Tab =====
+  function switchTab(sectionId) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.getElementById(sectionId).classList.add('active');
+    document.querySelectorAll('.tab-bar button').forEach(b => b.classList.remove('active'));
+    const tabMap = { sectionScan: 'tabScan', sectionRecords: 'tabRecords', sectionProducts: 'tabProducts' };
+    document.getElementById(tabMap[sectionId]).classList.add('active');
+    if (sectionId === 'sectionRecords') renderRecords();
+    if (sectionId === 'sectionProducts') renderProducts();
+  }
+
+  // ===== Render =====
+  function renderProducts(filter) {
+    const container = document.getElementById('productsList');
+    const q = (filter || document.getElementById('inputSearchProduct').value || '').toLowerCase().trim();
+    let list = q ? products.filter(p => p.name.toLowerCase().includes(q) || p.barcode.includes(q)) : products;
+    document.getElementById('productCount').textContent = list.length + ' 项';
+    if (list.length === 0) {
+      container.innerHTML = '<div class="empty"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#D1D5DB" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>' +
+        (products.length === 0 ? '<p>暂无商品，点击"添加"按钮</p>' : '<p>未找到匹配的商品</p>') + '</div>';
+      return;
+    }
+          container.innerHTML = list.map(p => '<div class="product-item"><div class="flex-1" style="min-width:0;"><div class="flex-between"><span class="text-sm" style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">'+esc(p.name)+'</span><span class="badge" style="flex-shrink:0;margin-left:8px;">'+esc(p.unit||'个')+'</span></div><div class="text-xs text-gray2 font-mono mt-1" style="word-break:break-all;">条码: '+esc(p.barcode)+(p.spec?' · '+esc(p.spec):'')+'</div></div><button class="edit-btn" data-barcode="'+esc(p.barcode)+'" style="flex-shrink:0;margin-left:8px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button></div>').join('');
+    container.querySelectorAll('.edit-btn').forEach(b => b.addEventListener('click', () => {
+      const p = products.find(x => x.barcode === b.dataset.barcode);
+      if (p) openProductModal(p);
+    }));
+  }
+
+  function renderRecords() {
+    const container = document.getElementById('recordsList');
+    const q = document.getElementById('inputSearchRecord').value.toLowerCase().trim();
+    const df = document.getElementById('selectDateFilter').value;
+    let list = [...transfers];
+    if (df === 'today') list = list.filter(r => r.timestamp.startsWith(today()));
+    else if (df === 'week') list = list.filter(r => r.timestamp >= weekStart());
+    else if (df === 'month') list = list.filter(r => r.timestamp >= monthStart());
+    if (q) list = list.filter(r => (r.productName && r.productName.toLowerCase().includes(q)) || r.barcode.includes(q) || (r.fromStore&&r.fromStore.toLowerCase().includes(q)) || (r.toStore&&r.toStore.toLowerCase().includes(q)) || (r.orderNo&&r.orderNo.toLowerCase().includes(q)));
+    list.sort((a,b) => b.timestamp.localeCompare(a.timestamp));
+    document.getElementById('recordCount').textContent = '共 '+list.length+' 条';
+    if (list.length === 0) {
+      container.innerHTML = '<div class="empty"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#D1D5DB" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><p>'+(transfers.length===0?'暂无调拨记录':'未找到匹配的记录')+'</p></div>';
+      return;
+    }
+    container.innerHTML = list.map(r => '<div class="record-item"><div class="flex-between"><div class="flex-1" style="min-width:0;"><div class="flex-row gap-1"><span class="text-sm" style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(r.productName||'未知商品')+'</span><span class="badge">'+esc(r.unit||'个')+'×'+r.quantity+'</span></div><div class="text-xs text-gray2" style="margin-top:2px;"><span class="font-mono">'+esc(r.barcode)+'</span>'+(r.orderNo?' · 单号:'+esc(r.orderNo):'')+(r.fromStore?' · 出:'+esc(r.fromStore):'')+(r.toStore?' · 入:'+esc(r.toStore):'')+'</div>'+(r.note?'<div class="text-xs text-gray2 mt-1">📝 '+esc(r.note)+'</div>':'')+'</div><div style="text-align:right;flex-shrink:0;margin-left:8px;"><div class="text-xs text-gray2">'+fmtDate(r.timestamp)+'</div><button class="trash-btn del-rec" data-id="'+r.id+'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></div></div></div>').join('');
+    container.querySelectorAll('.del-rec').forEach(b => b.addEventListener('click', () => {
+      if (!confirm('删除这条记录？')) return;
+      transfers = transfers.filter(r => r.id !== b.dataset.id);
+      saveTransfers();
+      renderRecords();
+      toast('已删除', 'success');
+    }));
+  }
+
+  // ===== Modal =====
+  function openProductModal(product) {
+    const modal = document.getElementById('productModal');
+    document.getElementById('modalTitle').textContent = product ? '编辑商品' : '添加商品';
+    document.getElementById('modalBarcode').value = product ? product.barcode : (currentScan ? currentScan.barcode : '');
+    document.getElementById('modalName').value = product ? product.name : '';
+    document.getElementById('modalUnit').value = product ? (product.unit||'个') : '个';
+    document.getElementById('modalSpec').value = product ? (product.spec||'') : '';
+    document.getElementById('modalEditId').value = product ? product.barcode : '';
+    const del = document.getElementById('btnDeleteProduct');
+    if (product) {
+      del.style.display = 'block';
+      del.onclick = () => {
+        if (!confirm('删除商品 "'+product.name+'"？')) return;
+        products = products.filter(p => p.barcode !== product.barcode);
+        saveProducts(); modal.classList.remove('open'); renderProducts(); toast('已删除', 'success');
+      };
+    } else { del.style.display = 'none'; }
+    modal.classList.add('open');
+  }
+
+  // ===== Export CSV =====
+  function exportCSV() {
+    if (transfers.length === 0) { toast('暂无记录可导出', 'error'); return; }
+    const h = ['序号','调拨单号','条码','商品名称','数量','单位','调出门店','调入门店','备注','录入时间'];
+    const rows = transfers.map((r,i) => [i+1, r.orderNo||'', r.barcode, r.productName||'', r.quantity, r.unit||'个', r.fromStore||'', r.toStore||'', r.note||'', fmtDate(r.timestamp)].map(v => '"'+String(v).replace(/"/g,'""')+'"').join(','));
+    const csv = '\uFEFF' + h.join(',') + '\n' + rows.join('\n');
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = '调拨记录_'+today()+'.csv';
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+    toast('已导出 '+transfers.length+' 条记录', 'success');
+  }
+
+  // ===== Init =====
+  loadData();
+  renderProducts();
+  renderRecords();
+
+  // Tab switching
+  document.querySelectorAll('.tab-bar button').forEach(b => {
+    b.addEventListener('click', () => switchTab(b.dataset.section));
+  });
+
+  // 扫码图标点击
+  document.getElementById('btnOpenScanner').addEventListener('click', () => {
+    const btn = document.getElementById('btnOpenScanner');
+    if (btn.classList.contains('disabled')) {
+      toast('请先填写完整的基本信息', '');
+      return;
+    }
+    openScanner();
+  });
+
+  // 关闭全屏相机
+  document.getElementById('btnCloseScanner').addEventListener('click', closeScanner);
+
+  // 切换摄像头
+  document.getElementById('btnToggleCam2').addEventListener('click', () => {
+    useBackCamera = !useBackCamera;
+    // 需要重新启动摄像头
+    stopCamera();
+    document.getElementById('scannerLoading').classList.remove('hidden');
+    document.getElementById('scannerLoading').querySelector('.scanner-loading-text').textContent = '点击启动相机';
+    document.getElementById('scannerLoading').querySelector('.scanner-loading-sub').textContent = '需授予摄像头权限';
+    document.getElementById('scanHintFull').textContent = '📷 点击启动相机';
+  });
+
+  // 清空扫码结果
+  document.getElementById('btnClearScan').addEventListener('click', () => {
+    currentScan = null;
+    document.getElementById('scanResult').classList.add('hidden');
+    document.getElementById('inputQuantity').value = '';
+    document.getElementById('inputNote').value = '';
+    checkConfirm();
+  });
+
+  document.getElementById('inputQuantity').addEventListener('input', checkConfirm);
+
+  // 确认调拨
+  document.getElementById('btnConfirm').addEventListener('click', () => {
+    if (!currentScan) { toast('请先扫码', 'error'); return; }
+    const qty = parseInt(document.getElementById('inputQuantity').value);
+    if (!qty || qty < 1) { toast('输入有效数量', 'error'); return; }
+    transfers.unshift({
+      id: uid(),
+      orderNo: document.getElementById('inputOrderNo').value.trim(),
+      barcode: currentScan.barcode,
+      productName: currentScan.product ? currentScan.product.name : '（未匹配）',
+      quantity: qty,
+      unit: document.getElementById('inputUnit').value || '个',
+      fromStore: document.getElementById('inputFromStore').value.trim(),
+      toStore: document.getElementById('inputToStore').value.trim(),
+      note: document.getElementById('inputNote').value.trim(),
+      timestamp: new Date().toISOString()
+    });
+    saveTransfers();
+    toast('✅ 已录入 '+(currentScan.product?currentScan.product.name:currentScan.barcode)+' × '+qty, 'success');
+    currentScan = null;
+    document.getElementById('scanResult').classList.add('hidden');
+    document.getElementById('inputQuantity').value = '';
+    document.getElementById('inputNote').value = '';
+    checkConfirm();
+  });
+
+  // 搜索 / 筛选
+  document.getElementById('inputSearchRecord').addEventListener('input', renderRecords);
+  document.getElementById('selectDateFilter').addEventListener('change', renderRecords);
+  document.getElementById('inputSearchProduct').addEventListener('input', () => renderProducts());
+
+  // 基本信息输入验证
+  document.getElementById('inputOrderNo').addEventListener('input', checkBasicInfo);
+  document.getElementById('inputFromStore').addEventListener('input', checkBasicInfo);
+  document.getElementById('inputToStore').addEventListener('input', checkBasicInfo);
+
+  // ===== 自定义确认弹窗（居中显示在手机页面） =====
+  function showConfirm(opts) {
+    const modal = document.getElementById('confirmModal');
+    document.getElementById('confirmTitle').textContent = opts.title || '确认操作';
+    document.getElementById('confirmMsg').innerHTML = opts.msg || '确定要执行此操作吗？';
+    const okBtn = document.getElementById('confirmOk');
+    okBtn.textContent = opts.okText || '确认';
+    okBtn.className = opts.danger ? 'confirm-btn-danger' : 'confirm-btn-danger';
+    document.getElementById('confirmCancel').onclick = () => modal.classList.remove('open');
+    okBtn.onclick = () => {
+      modal.classList.remove('open');
+      if (opts.onOk) opts.onOk();
+    };
+    modal.classList.add('open');
+  }
+
+  // 商品库按钮
+  // 清空商品库
+  document.getElementById('btnClearProducts').addEventListener('click', () => {
+    if (products.length === 0) { toast('商品库已为空', ''); return; }
+    showConfirm({
+      title: '清空全部商品？',
+      msg: '共有 <b>' + products.length + '</b> 个商品，此操作不可恢复！<br><br>建议先点右上角「💾存」备份数据。',
+      danger: true,
+      onOk: () => {
+        showConfirm({
+          title: '再次确认',
+          msg: '真的要删除全部 <b>' + products.length + '</b> 个商品吗？',
+          danger: true,
+          okText: '确认删除',
+          onOk: () => {
+            products = [];
+            saveProducts();
+            renderProducts();
+            toast('✅ 已清空全部商品', 'success');
+          }
+        });
+      }
+    });
+  });
+
+  document.getElementById('btnAddProduct').addEventListener('click', () => openProductModal(null));
+
+  // 导入 Excel 表格
+  document.getElementById('btnImportExcel').addEventListener('click', () => {
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = '.xlsx,.xls';
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const data = new Uint8Array(ev.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+          if (json.length < 2) { toast('表格为空或只有表头', 'error'); return; }
+
+          const headers = json[0].map(h => String(h).trim());
+          	          let bIdx = headers.findIndex(h => h.includes('条形码') || h.includes('条码'));
+	          if (bIdx < 0) bIdx = headers.findIndex(h => h.includes('商品编码') && !h.includes('关联'));
+          let nIdx = headers.findIndex(h => h.includes('商品名称'));
+          if (nIdx < 0) nIdx = headers.findIndex(h => h.includes('名称'));
+          let uIdx = headers.findIndex(h => h.includes('基本单位') || h.includes('单位'));
+
+          if (bIdx < 0 || nIdx < 0) { toast('未找到"条形码"和"商品名称"列', 'error'); return; }
+
+          let added = 0, skipped = 0, multiBarcode = 0, filterZb = 0;
+          for (let i = 1; i < json.length; i++) {
+            const row = json[i];
+            if (!row || !row[bIdx] || !row[nIdx]) continue;
+            let barcode = String(row[bIdx]).trim();
+            const name = String(row[nIdx]).trim();
+            if (!barcode || !name) continue;
+
+            // 处理多个条码（逗号分隔）
+            const barcodes = barcode.split(',').map(b => b.trim()).filter(b => b);
+            if (barcodes.length > 1) multiBarcode++;
+
+            for (const bc of barcodes) {
+              if (!bc) continue;
+              if (/ZB$/i.test(bc)) { filterZb++; continue; }
+              if (products.some(p => p.barcode === bc)) { skipped++; continue; }
+              const unitVal = uIdx >= 0 && row[uIdx] ? String(row[uIdx]).trim() || '个' : '个';
+              products.push({ barcode: bc, name, unit: unitVal, spec: '', createdAt: new Date().toISOString() });
+              added++;
+            }
+          }
+          saveProducts();
+          renderProducts();
+          toast('✅ 导入 '+added+' 个商品'+(filterZb?'，剔除 '+filterZb+' 个ZB条码':'')+(skipped?'，跳过 '+skipped+' 个重复':'')+(multiBarcode?'（含 '+multiBarcode+' 行多条码）':''), 'success');
+        } catch(err) {
+          toast('❌ 导入失败：'+err.message, 'error');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    };
+    input.click();
+  });
+
+  document.getElementById('btnImportDemo').addEventListener('click', () => {
+    if (products.length > 0 && !confirm('导入示例会覆盖现有商品，确认？')) return;
+    products = [
+      { barcode:'6901234567890', name:'农夫山泉矿泉水', unit:'瓶', spec:'550ml', createdAt: new Date().toISOString() },
+      { barcode:'6909876543210', name:'康师傅方便面', unit:'箱', spec:'12桶装', createdAt: new Date().toISOString() },
+      { barcode:'6912345678901', name:'蒙牛纯牛奶', unit:'箱', spec:'250ml×24盒', createdAt: new Date().toISOString() },
+      { barcode:'6923456789012', name:'青岛啤酒', unit:'箱', spec:'500ml×12听', createdAt: new Date().toISOString() },
+      { barcode:'6934567890123', name:'心相印抽纸', unit:'提', spec:'3层×10包', createdAt: new Date().toISOString() },
+    ];
+    saveProducts(); renderProducts(); toast('已导入5个示例商品', 'success');
+  });
+
+  // Modal
+  document.querySelectorAll('.modalClose').forEach(b => b.addEventListener('click', () => b.closest('.modal').classList.remove('open')));
+  document.getElementById('productModal').addEventListener('click', e => { if (e.target === e.currentTarget) e.target.classList.remove('open'); });
+
+  // 保存商品
+  document.getElementById('btnSaveProduct').addEventListener('click', () => {
+    const barcode = document.getElementById('modalBarcode').value.trim();
+    const name = document.getElementById('modalName').value.trim();
+    const unit = document.getElementById('modalUnit').value.trim() || '个';
+    const spec = document.getElementById('modalSpec').value.trim();
+    const editId = document.getElementById('modalEditId').value;
+    if (!barcode) { toast('请输入条码', 'error'); return; }
+    if (!name) { toast('请输入商品名称', 'error'); return; }
+    if (editId) {
+      const idx = products.findIndex(p => p.barcode === editId);
+      if (idx >= 0) {
+        if (barcode !== editId && products.some(p => p.barcode === barcode)) { toast('条码已存在', 'error'); return; }
+        products[idx] = { ...products[idx], barcode, name, unit, spec };
+      }
+    } else {
+      if (products.some(p => p.barcode === barcode)) { toast('条码已存在', 'error'); return; }
+      products.push({ barcode, name, unit, spec, createdAt: new Date().toISOString() });
+    }
+    saveProducts();
+    document.getElementById('productModal').classList.remove('open');
+    renderProducts();
+    toast(editId ? '已更新' : '已添加', 'success');
+    if (currentScan && currentScan.barcode === barcode) {
+      const m = products.find(p => p.barcode === barcode);
+      if (m) {
+        currentScan.product = m;
+        document.getElementById('scanProductName').textContent = m.name;
+        document.getElementById('matchStatus').innerHTML = '<span class="badge badge-green">✓ 已匹配</span>';
+        if (m.unit) document.getElementById('inputUnit').value = m.unit;
+      }
+    }
+  });
+
+  // 手动存/取
+  document.getElementById('btnSaveData').addEventListener('click', exportAllData);
+  document.getElementById('btnLoadData').addEventListener('click', importAllData);
+
+  // 导出 CSV
+  document.getElementById('btnExport').addEventListener('click', exportCSV);
+  document.getElementById('btnExport2').addEventListener('click', exportCSV);
+
+  // 存储状态检测
+  setTimeout(() => {
+    try {
+      localStorage.setItem('_test_', '1');
+      localStorage.removeItem('_test_');
+      storageOk = true;
+    } catch(e) {
+      storageOk = false;
+    }
+    updateStorageStatus();
+    document.getElementById('autoSaveHint').textContent = storageOk
+      ? '数据自动存到手机本地'
+      : '此浏览器不支持自动存，请手动点💾存备份';
+    if (!storageOk) {
+      toast('📌 提示：当前环境无法自动保存，请用右上角「💾存」手动备份数据', '');
+    }
+  }, 1000);
+
+  // 手动输入条码
+  document.getElementById('btnManualMatch').addEventListener('click', () => {
+    const code = document.getElementById('manualBarcode').value.trim();
+    if (!code) { toast('请输入条码', 'error'); return; }
+    const matched = products.find(p => p.barcode === code);
+    const r = document.getElementById('manualMatchResult');
+    currentScan = { barcode: code, product: matched || null };
+
+    document.getElementById('scanResult').classList.remove('hidden');
+    document.getElementById('scanBarcode').textContent = code;
+
+    if (matched) {
+      document.getElementById('scanProductName').textContent = matched.name;
+      document.getElementById('matchStatus').innerHTML = '<span class="badge badge-green">✓ 已匹配</span>';
+      if (matched.unit) document.getElementById('inputUnit').value = matched.unit;
+      r.textContent = '✅ 已匹配: ' + matched.name;
+      r.className = 'ok'; r.classList.remove('hidden');
+      toast('✅ 已匹配: ' + matched.name, 'success');
+    } else {
+      document.getElementById('scanProductName').textContent = '（未匹配到商品）';
+      document.getElementById('matchStatus').innerHTML = '<span class="badge badge-yellow">! 未匹配</span>';
+      r.textContent = '⚠️ 该条码未匹配，请先在商品库添加';
+      r.className = 'warn'; r.classList.remove('hidden');
+    }
+    checkConfirm();
+    document.getElementById('inputQuantity').focus();
+  });
+
+  document.getElementById('manualBarcode').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('btnManualMatch').click();
+  });
+
+  // 页面可见性变化 - 回到页面时恢复相机
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && document.getElementById('scannerOverlay').classList.contains('open') && !mediaStream) {
+      document.getElementById('scannerLoading').classList.remove('hidden');
+      document.getElementById('scannerLoading').querySelector('.scanner-loading-text').textContent = '点击启动相机';
+    }
+  });
+
+  // 初始检查基本信息状态
+  checkBasicInfo();
+
+})();
+</script>
+</div>
+</body>
+</html>
