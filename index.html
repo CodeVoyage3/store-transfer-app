@@ -289,6 +289,7 @@
         <div class="text-sm mt-1" style="color:#374151;"><span style="color:#6B7280;">调出：</span><span id="displayFromStore" style="font-weight:600;">-</span><span style="margin:0 8px;color:#9CA3AF;">→</span><span style="color:#6B7280;">调入：</span><span id="displayToStore" style="font-weight:600;">-</span></div>
         <div class="text-sm mt-1" style="color:#374151;"><span style="color:#6B7280;">入库单号：</span><span id="displayInboundNo" style="font-weight:600;">-</span></div>
         <div class="text-sm mt-1" style="color:#374151;"><span style="color:#6B7280;">调拨类型：</span><span id="displayTransferType" style="font-weight:600;">-</span></div>
+        <div class="text-sm mt-1" style="color:#374151;"><span style="color:#6B7280;">备注：</span><span id="displayNote" style="font-weight:600;color:#6B7280;">-</span></div>
       </div>
       <!-- 编辑态：可编辑输入框 -->
       <div id="infoEdit" class="hidden">
@@ -305,6 +306,7 @@
             <option value="门店创建">门店创建</option>
           </select>
         </div>
+        <div class="mb-2"><label>备注</label><textarea id="inputNote" class="input" placeholder="非必填" rows="2" style="resize:none;"></textarea></div>
         <div id="infoEditError" class="text-sm" style="display:none;background:#FEF2F2;color:#DC2626;border-radius:10px;padding:10px 14px;margin-bottom:6px;font-weight:500;"></div>
         <div class="flex-row gap-2">
           <button id="btnResetInfoEdit" class="btn btn-sm btn-outline" style="flex:1;color:#EF4444;border-color:#EF4444;">🔄 重置</button>
@@ -549,6 +551,7 @@
         <option value="门店创建">门店创建</option>
       </select>
     </div>
+    <div class="mb-2"><label>备注</label><textarea id="infoNote" class="input" placeholder="非必填，可填写备注信息" rows="2" style="resize:none;"></textarea></div>
     <div id="infoError" class="text-sm" style="display:none;background:#FEF2F2;color:#DC2626;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-weight:500;"></div>
     <button id="btnInfoConfirm" class="btn btn-green" style="margin-top:4px;">✅ 确认并进入扫码</button>
   </div>
@@ -733,11 +736,13 @@
     const toStore = document.getElementById('inputToStore').value.trim();
     const inboundNo = document.getElementById('inputInboundNo').value.trim();
     const transferType = document.getElementById('inputTransferType').value;
+    const note = document.getElementById('inputNote').value.trim();
     document.getElementById('displayOrderNo').textContent = orderNo || '-';
     document.getElementById('displayFromStore').textContent = fromStore || '-';
     document.getElementById('displayToStore').textContent = toStore || '-';
     document.getElementById('displayInboundNo').textContent = inboundNo || '-';
     document.getElementById('displayTransferType').textContent = transferType || '-';
+    document.getElementById('displayNote').textContent = note || '-';
     document.getElementById('infoDisplay').classList.remove('hidden');
     document.getElementById('infoEdit').classList.add('hidden');
     document.getElementById('btnToggleEdit').style.display = 'block';
@@ -1220,7 +1225,7 @@
     const file = new File([blob], filename+'.xlsx', {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
 
     if (navigator.share && navigator.canShare && navigator.canShare({files: [file]})) {
-      navigator.share({ files: [file], title: '门店调拨单', text: '共 '+dataList.length+' 条商品记录' })
+      navigator.share({ files: [file], title: '门店调拨单' })
         .then(() => toast('已分享 '+dataList.length+' 条记录', 'success'))
         .catch(err => {
           if (err.name !== 'AbortError') {
@@ -1256,6 +1261,7 @@
     const toStore = document.getElementById('infoToStore').value.trim();
     const inboundNo = document.getElementById('infoInboundNo').value.trim();
     const transferType = document.getElementById('infoTransferType').value;
+    const note = document.getElementById('infoNote').value.trim();
     const errEl = document.getElementById('infoError');
     if (!orderNo || !fromStore || !toStore || !transferType) {
       errEl.textContent = '请填写完整信息（调拨类型为必填项）';
@@ -1274,6 +1280,7 @@
     document.getElementById('inputToStore').value = toStore;
     document.getElementById('inputInboundNo').value = inboundNo;
     document.getElementById('inputTransferType').value = transferType;
+    document.getElementById('inputNote').value = note;
     document.getElementById('infoModal').classList.remove('open');
     switchToLockedMode();
     currentBoxNo = 1;
@@ -1357,7 +1364,7 @@
       toStore: document.getElementById('inputToStore').value.trim(),
       inboundNo: document.getElementById('inputInboundNo').value.trim(),
       transferType: document.getElementById('inputTransferType').value,
-      note: '',
+      note: document.getElementById('inputNote').value.trim(),
       timestamp: new Date().toISOString()
     });
     saveTransfers();
@@ -1390,11 +1397,13 @@
       const oldTo = document.getElementById('displayToStore').textContent;
       const oldInbound = document.getElementById('displayInboundNo').textContent;
       const oldType = document.getElementById('displayTransferType').textContent;
+      const oldNote = document.getElementById('displayNote').textContent;
       document.getElementById('inputOrderNo').value = oldOrder !== '-' ? oldOrder : '';
       document.getElementById('inputFromStore').value = oldFrom !== '-' ? oldFrom : '';
       document.getElementById('inputToStore').value = oldTo !== '-' ? oldTo : '';
       document.getElementById('inputInboundNo').value = oldInbound !== '-' ? oldInbound : '';
       document.getElementById('inputTransferType').value = oldType !== '-' ? oldType : '';
+      document.getElementById('inputNote').value = oldNote !== '-' ? oldNote : '';
       document.getElementById('infoEditError').style.display = 'none';
       switchToLockedMode();
     } else {
@@ -1441,6 +1450,7 @@
     document.getElementById('inputToStore').value = '';
     document.getElementById('inputInboundNo').value = '';
     document.getElementById('inputTransferType').value = '';
+    document.getElementById('inputNote').value = '';
     document.getElementById('infoEditError').style.display = 'none';
     // 重置箱管理
     currentBoxNo = 1;
