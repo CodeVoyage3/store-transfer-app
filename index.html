@@ -287,18 +287,20 @@
       <div id="infoDisplay">
         <div class="text-sm" style="color:#374151;"><span style="color:#6B7280;">单号：</span><span id="displayOrderNo" style="font-weight:600;">-</span></div>
         <div class="text-sm mt-1" style="color:#374151;"><span style="color:#6B7280;">调出：</span><span id="displayFromStore" style="font-weight:600;">-</span><span style="margin:0 8px;color:#9CA3AF;">→</span><span style="color:#6B7280;">调入：</span><span id="displayToStore" style="font-weight:600;">-</span></div>
-        <div class="text-sm mt-1" style="color:#374151;"><span style="color:#6B7280;">入库单号：</span><span id="displayInboundNo" style="font-weight:600;">-</span></div>
-        <div class="text-sm mt-1" style="color:#374151;"><span style="color:#6B7280;">调拨类型：</span><span id="displayTransferType" style="font-weight:600;">-</span></div>
-        <div class="text-sm mt-1" style="color:#374151;"><span style="color:#6B7280;">备注：</span><span id="displayNote" style="font-weight:600;color:#6B7280;">-</span></div>
+        <div class="text-sm mt-1" style="color:#374151;display:none;"><span style="color:#6B7280;">入库单号：</span><span id="displayInboundNo" style="font-weight:600;">-</span></div>
+	        <div class="text-sm mt-1" style="color:#374151;display:none;"><span style="color:#6B7280;">调拨类型：</span><span id="displayTransferType" style="font-weight:600;">-</span></div>
+	        <div class="text-sm mt-1" style="color:#374151;display:none;"><span style="color:#6B7280;">备注：</span><span id="displayNote" style="font-weight:600;color:#6B7280;">-</span></div>
+	        <div class="text-sm mt-1" style="color:#374151;display:none;"><span style="color:#6B7280;">店长：</span><span id="displayManager" style="font-weight:600;">-</span></div>
+	        <div class="text-sm mt-1" style="color:#374151;display:none;"><span style="color:#6B7280;">经手人：</span><span id="displayHandler" style="font-weight:600;">-</span></div>
       </div>
       <!-- 编辑态：可编辑输入框 -->
       <div id="infoEdit" class="hidden">
-        <div class="mb-2"><label>调拨单号 *</label><input id="inputOrderNo" class="input" placeholder="如：DB20240601-001" /></div>
+        <div class="mb-2"><label>调拨单号 *</label><input id="inputOrderNo" class="input" placeholder="如：RVKKT/RFKRK开头" /></div>
         <div class="grid-2 mb-2">
-          <div><label>调出门店 *</label><input id="inputFromStore" class="input" placeholder="如：总仓" /></div>
-          <div><label>调入门店 *</label><input id="inputToStore" class="input" placeholder="如：A分店" /></div>
+          <div><label>调出门店 *</label><input id="inputFromStore" class="input" placeholder="如：东莞壹号广场KKV店" /></div>
+          <div><label>调入门店 *</label><input id="inputToStore" class="input" placeholder="如：东莞厚街万达广场KKV店" /></div>
         </div>
-        <div class="mb-2"><label>门店入库单号</label><input id="inputInboundNo" class="input" placeholder="非必填" /></div>
+        <div class="mb-2"><label>门店入库单号</label><input id="inputInboundNo" class="input" placeholder="如：TPA4000001298231" /></div>
         <div class="mb-2"><label>调拨类型 *</label>
           <select id="inputTransferType" class="input">
             <option value="">请选择</option>
@@ -307,6 +309,10 @@
           </select>
         </div>
         <div class="mb-2"><label>备注</label><textarea id="inputNote" class="input" placeholder="非必填" rows="2" style="resize:none;"></textarea></div>
+        <div class="grid-2 mb-2">
+          <div><label>店长 *</label><input id="inputManager" class="input" placeholder="店长姓名" /></div>
+          <div><label>经手人 *</label><input id="inputHandler" class="input" placeholder="经手人姓名" /></div>
+        </div>
         <div id="infoEditError" class="text-sm" style="display:none;background:#FEF2F2;color:#DC2626;border-radius:10px;padding:10px 14px;margin-bottom:6px;font-weight:500;"></div>
         <div class="flex-row gap-2">
           <button id="btnResetInfoEdit" class="btn btn-sm btn-outline" style="flex:1;color:#EF4444;border-color:#EF4444;">🔄 重置</button>
@@ -544,12 +550,12 @@
       <span style="font-size:17px;font-weight:700;">📋 调拨基本信息</span>
       <button class="modalClose" data-modal="infoModal" style="background:none;border:none;font-size:22px;color:#9CA3AF;cursor:pointer;">✕</button>
     </div>
-    <div class="mb-2"><label>调拨单号 *</label><input id="infoOrderNo" class="input" placeholder="如：DB20240601-001" /></div>
+    <div class="mb-2"><label>调拨单号 *</label><input id="infoOrderNo" class="input" placeholder="如：RVKKT/RFKRK开头" /></div>
     <div class="grid-2 mb-2">
-      <div><label>调出门店 *</label><input id="infoFromStore" class="input" placeholder="如：总仓" /></div>
-      <div><label>调入门店 *</label><input id="infoToStore" class="input" placeholder="如：A分店" /></div>
+      <div><label>调出门店 *</label><input id="infoFromStore" class="input" placeholder="如：东莞壹号广场KKV店" /></div>
+      <div><label>调入门店 *</label><input id="infoToStore" class="input" placeholder="如：东莞厚街万达广场KKV店" /></div>
     </div>
-    <div class="mb-2"><label>门店入库单号</label><input id="infoInboundNo" class="input" placeholder="非必填" /></div>
+    <div class="mb-2"><label>门店入库单号</label><input id="infoInboundNo" class="input" placeholder="如：TPA4000001298231" /></div>
     <div class="mb-2"><label>调拨类型 *</label>
       <select id="infoTransferType" class="input">
         <option value="">请选择</option>
@@ -558,6 +564,10 @@
       </select>
     </div>
     <div class="mb-2"><label>备注</label><textarea id="infoNote" class="input" placeholder="非必填，可填写备注信息" rows="2" style="resize:none;"></textarea></div>
+    <div class="grid-2 mb-2">
+      <div><label>店长 *</label><input id="infoManager" class="input" placeholder="店长姓名" /></div>
+      <div><label>经手人 *</label><input id="infoHandler" class="input" placeholder="经手人姓名" /></div>
+    </div>
     <div id="infoError" class="text-sm" style="display:none;background:#FEF2F2;color:#DC2626;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-weight:500;"></div>
     <button id="btnInfoConfirm" class="btn btn-green" style="margin-top:4px;">✅ 确认并进入扫码</button>
   </div>
@@ -588,6 +598,7 @@
   // ===== 存储 =====
   const KEY_PRODUCTS = 'st_products';
   const KEY_TRANSFERS = 'st_transfers';
+  const KEY_LAST_VISIT = 'st_last_visit';
   let products = [], transfers = [];
   let currentScan = null;
   let latestRecords = [];
@@ -638,6 +649,21 @@
     let t = tryLoad(KEY_TRANSFERS);
     products = p || [];
     transfers = t || [];
+  }
+  // 超过15天未打开则自动清空数据
+  function checkExpiration() {
+    const now = Date.now();
+    const lastVisit = tryLoad(KEY_LAST_VISIT);
+    if (lastVisit !== null) {
+      const daysPassed = (now - lastVisit) / (24 * 60 * 60 * 1000);
+      if (daysPassed > 15) {
+        products = [];
+        transfers = [];
+        saveProducts();
+        saveTransfers();
+      }
+    }
+    trySave(KEY_LAST_VISIT, now);
   }
   function saveProducts() {
     if (!trySave(KEY_PRODUCTS, products)) {
@@ -743,12 +769,16 @@
     const inboundNo = document.getElementById('inputInboundNo').value.trim();
     const transferType = document.getElementById('inputTransferType').value;
     const note = document.getElementById('inputNote').value.trim();
+    const manager = document.getElementById('inputManager').value.trim();
+    const handler = document.getElementById('inputHandler').value.trim();
     document.getElementById('displayOrderNo').textContent = orderNo || '-';
     document.getElementById('displayFromStore').textContent = fromStore || '-';
     document.getElementById('displayToStore').textContent = toStore || '-';
     document.getElementById('displayInboundNo').textContent = inboundNo || '-';
     document.getElementById('displayTransferType').textContent = transferType || '-';
     document.getElementById('displayNote').textContent = note || '-';
+    document.getElementById('displayManager').textContent = manager || '-';
+    document.getElementById('displayHandler').textContent = handler || '-';
     document.getElementById('infoDisplay').classList.remove('hidden');
     document.getElementById('infoEdit').classList.add('hidden');
     document.getElementById('btnToggleEdit').style.display = 'block';
@@ -1161,7 +1191,7 @@
       if (!groups[key]) groups[key] = [];
       groups[key].push(r);
     });
-    const h = ['门店调拨单号','货源门店','目标门店','创建时间','调拨类型','门店入库单号','备注','商品编码','商品条形码','商品名称','实调数量','总计','仓库','箱号'];
+    const h = ['门店调拨单号','货源门店','目标门店','创建时间','调拨类型','门店入库单号','备注','店长','经手人','商品编码','商品条形码','商品名称','实调数量','总计','仓库','箱号'];
     const exportTime = nowStr();
     const sheetData = [h];
     const merges = [];
@@ -1187,8 +1217,10 @@
           row.push(first.transferType || '调拨出库');
           row.push(first.inboundNo || '');
           row.push(first.note || '');
+          row.push(first.storeManager || '');
+          row.push(first.handler || '');
         } else {
-          row.push(''); row.push(''); row.push(''); row.push(''); row.push(''); row.push(''); row.push('');
+          row.push(''); row.push(''); row.push(''); row.push(''); row.push(''); row.push(''); row.push(''); row.push(''); row.push('');
         }
         // 商品明细每行独立
         row.push(r.productCode || '');
@@ -1203,7 +1235,7 @@
         const boxNo = r.boxNo || 1;
         if (boxNo !== lastBoxNo) {
           if (lastBoxNo !== -1 && globalRow - 1 > boxStartRow) {
-            merges.push({s:{r:boxStartRow,c:13}, e:{r:globalRow-1,c:13}});
+            merges.push({s:{r:boxStartRow,c:15}, e:{r:globalRow-1,c:15}});
           }
           row.push('第'+boxNo+'箱');
           lastBoxNo = boxNo;
@@ -1216,13 +1248,13 @@
       });
       // 合并当前组的箱号尾段
       if (globalRow - 1 > boxStartRow) {
-        merges.push({s:{r:boxStartRow,c:13}, e:{r:globalRow-1,c:13}});
+        merges.push({s:{r:boxStartRow,c:15}, e:{r:globalRow-1,c:15}});
       }
       // 合并单据级字段：A-G 列 + K 列（总计）
       const endRow = globalRow - 1;
       if (endRow > startRow) {
-        for (let c = 0; c <= 6; c++) merges.push({s:{r:startRow,c}, e:{r:endRow,c}});
-        merges.push({s:{r:startRow,c:11}, e:{r:endRow,c:11}}); // 总计 L 列
+        for (let c = 0; c <= 8; c++) merges.push({s:{r:startRow,c}, e:{r:endRow,c}});
+        merges.push({s:{r:startRow,c:13}, e:{r:endRow,c:13}}); // 总计 N 列
       }
     });
     const csvHeader = h.join(',');
@@ -1235,6 +1267,7 @@
         csvRows.push([
           orderNo, first.fromStore||'', first.toStore||'', exportTime,
           first.transferType||'调拨出库', first.inboundNo||'', first.note||'',
+          first.storeManager||'', first.handler||'',
           r.productCode||'', r.barcode||'', r.productName||'', parseInt(r.quantity)||0,
           totalQty, (first.fromStore||'')+'正常仓', '第'+(r.boxNo||1)+'箱'
         ].map(v => '"'+String(v).replace(/"/g,'""')+'"').join(','));
@@ -1265,7 +1298,7 @@
       if (!groups[key]) groups[key] = [];
       groups[key].push(r);
     });
-    const h = ['门店调拨单号','货源门店','目标门店','创建时间','调拨类型','门店入库单号','备注','商品编码','商品条形码','商品名称','实调数量','总计','仓库','箱号'];
+    const h = ['门店调拨单号','货源门店','目标门店','创建时间','调拨类型','门店入库单号','备注','店长','经手人','商品编码','商品条形码','商品名称','实调数量','总计','仓库','箱号'];
     const exportTime = nowStr();
     const sheetData = [h];
     const merges = [];
@@ -1282,9 +1315,10 @@
         const isFirstRow = idx === 0;
         if (isFirstRow) {
           row.push(orderNo, first.fromStore||'', first.toStore||'', exportTime,
-            first.transferType||'调拨出库', first.inboundNo||'', first.note||'');
+            first.transferType||'调拨出库', first.inboundNo||'', first.note||'',
+            first.storeManager||'', first.handler||'');
         } else {
-          row.push('','','','','','','');
+          row.push('','','','','','','','','');
         }
         row.push(r.productCode||'', r.barcode||'', r.productName||'', parseInt(r.quantity)||0);
         row.push(isFirstRow ? totalQty : '');
@@ -1292,7 +1326,7 @@
         const boxNo = r.boxNo || 1;
         if (boxNo !== lastBoxNo) {
           if (lastBoxNo !== -1 && globalRow - 1 > boxStartRow) {
-            merges.push({s:{r:boxStartRow,c:13}, e:{r:globalRow-1,c:13}});
+            merges.push({s:{r:boxStartRow,c:15}, e:{r:globalRow-1,c:15}});
           }
           row.push('第'+boxNo+'箱');
           lastBoxNo = boxNo;
@@ -1304,12 +1338,12 @@
         globalRow++;
       });
       if (globalRow - 1 > boxStartRow) {
-        merges.push({s:{r:boxStartRow,c:13}, e:{r:globalRow-1,c:13}});
+        merges.push({s:{r:boxStartRow,c:15}, e:{r:globalRow-1,c:15}});
       }
       const endRow = globalRow - 1;
       if (endRow > startRow) {
-        for (let c = 0; c <= 6; c++) merges.push({s:{r:startRow,c}, e:{r:endRow,c}});
-        merges.push({s:{r:startRow,c:11}, e:{r:endRow,c:11}});
+        for (let c = 0; c <= 8; c++) merges.push({s:{r:startRow,c}, e:{r:endRow,c}});
+        merges.push({s:{r:startRow,c:13}, e:{r:endRow,c:13}}); // 总计 N 列
       }
     });
     downloadAsXLSX(sheetData, merges, filename, dataList.length);
@@ -1335,6 +1369,7 @@
 
   // ===== Init =====
   loadData();
+  checkExpiration();
   renderProducts();
   renderRecords();
   renderLatestRecords();
@@ -1347,9 +1382,11 @@
     const inboundNo = document.getElementById('infoInboundNo').value.trim();
     const transferType = document.getElementById('infoTransferType').value;
     const note = document.getElementById('infoNote').value.trim();
+    const manager = document.getElementById('infoManager').value.trim();
+    const handler = document.getElementById('infoHandler').value.trim();
     const errEl = document.getElementById('infoError');
-    if (!orderNo || !fromStore || !toStore || !transferType) {
-      errEl.textContent = '请填写完整信息（调拨类型为必填项）';
+    if (!orderNo || !fromStore || !toStore || !transferType || !manager || !handler) {
+      errEl.textContent = '请填写完整信息（单号、门店、类型、店长、经手人为必填项）';
       errEl.style.display = 'block';
       return;
     }
@@ -1366,6 +1403,8 @@
     document.getElementById('inputInboundNo').value = inboundNo;
     document.getElementById('inputTransferType').value = transferType;
     document.getElementById('inputNote').value = note;
+    document.getElementById('inputManager').value = document.getElementById('infoManager').value.trim();
+    document.getElementById('inputHandler').value = document.getElementById('infoHandler').value.trim();
     document.getElementById('infoModal').classList.remove('open');
     switchToLockedMode();
     currentBoxNo = 1;
@@ -1466,6 +1505,8 @@
         inboundNo: document.getElementById('inputInboundNo').value.trim(),
         transferType: document.getElementById('inputTransferType').value,
         note: document.getElementById('inputNote').value.trim(),
+        storeManager: document.getElementById('inputManager').value.trim(),
+        handler: document.getElementById('inputHandler').value.trim(),
         timestamp: new Date().toISOString()
       });
       totalQty = qty;
@@ -1524,9 +1565,11 @@
     const fromStore = document.getElementById('inputFromStore').value.trim();
     const toStore = document.getElementById('inputToStore').value.trim();
     const transferType = document.getElementById('inputTransferType').value;
+    const manager = document.getElementById('inputManager').value.trim();
+    const handler = document.getElementById('inputHandler').value.trim();
     const errEl = document.getElementById('infoEditError');
-    if (!orderNo || !fromStore || !toStore || !transferType) {
-      errEl.textContent = '请填写完整信息（调拨类型为必填项）';
+    if (!orderNo || !fromStore || !toStore || !transferType || !manager || !handler) {
+      errEl.textContent = '请填写完整信息（单号、门店、类型、店长、经手人为必填项）';
       errEl.style.display = 'block';
       return;
     }
@@ -1555,6 +1598,8 @@
     document.getElementById('inputInboundNo').value = '';
     document.getElementById('inputTransferType').value = '';
     document.getElementById('inputNote').value = '';
+    document.getElementById('inputManager').value = '';
+    document.getElementById('inputHandler').value = '';
     document.getElementById('infoEditError').style.display = 'none';
     // 重置箱管理
     currentBoxNo = 1;
@@ -1645,7 +1690,7 @@
     if (products.length === 0) { toast('商品库已为空', ''); return; }
     showConfirm({
       title: '清空全部商品？',
-      msg: '共有 <b>' + products.length + '</b> 个商品，此操作不可恢复！<br><br>建议先点右上角「💾存」备份数据。',
+      msg: '共有 <b>' + products.length + '</b> 个商品，此操作不可恢复！',
       danger: true,
       onOk: () => {
         showConfirm({
