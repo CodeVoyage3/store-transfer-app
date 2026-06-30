@@ -776,32 +776,13 @@
   // ===== 锁定/编辑切换 =====
   let isEditingInfo = false;
   function switchToLockedMode() {
-    const orderNo = document.getElementById('inputOrderNo').value.trim();
-    const fromStore = document.getElementById('inputFromStore').value.trim();
-    const toStore = document.getElementById('inputToStore').value.trim();
-    const inboundNo = document.getElementById('inputInboundNo').value.trim();
-    const transferType = document.getElementById('inputTransferType').value;
-    const note = document.getElementById('inputNote').value.trim();
-    const manager = document.getElementById('inputManager').value.trim();
-    const handler = document.getElementById('inputHandler').value.trim();
-    document.getElementById('displayOrderNo').textContent = orderNo || '-';
-    document.getElementById('displayFromStore').textContent = fromStore || '-';
-    document.getElementById('displayToStore').textContent = toStore || '-';
-    document.getElementById('displayInboundNo').textContent = inboundNo || '-';
-    document.getElementById('displayTransferType').textContent = transferType || '-';
-    document.getElementById('displayNote').textContent = note || '-';
-    document.getElementById('displayManager').textContent = manager || '-';
-    document.getElementById('displayHandler').textContent = handler || '-';
-    document.getElementById('infoDisplay').classList.remove('hidden');
-    document.getElementById('infoEdit').classList.add('hidden');
-    document.getElementById('btnToggleEdit').style.display = 'block';
-    document.getElementById('btnToggleEdit').textContent = '✏️ 修改';
+    // 基本信息编辑已移除（扫码页精简）
     isEditingInfo = false;
   }
 
   // ===== 箱管理 =====
   function getCurrentOrderNo() {
-    return document.getElementById('inputOrderNo').value.trim();
+    return '';
   }
   function getBoxNumbers() {
     const orderNo = getCurrentOrderNo();
@@ -1418,14 +1399,6 @@
     }
     errEl.style.display = 'none';
     // 填入扫码页面的字段并切换到锁定态
-    document.getElementById('inputOrderNo').value = orderNo;
-    document.getElementById('inputFromStore').value = fromStore;
-    document.getElementById('inputToStore').value = toStore;
-    document.getElementById('inputInboundNo').value = inboundNo;
-    document.getElementById('inputTransferType').value = transferType;
-    document.getElementById('inputNote').value = note;
-    document.getElementById('inputManager').value = document.getElementById('infoManager').value.trim();
-    document.getElementById('inputHandler').value = document.getElementById('infoHandler').value.trim();
     document.getElementById('infoModal').classList.remove('open');
     switchToLockedMode();
     checkBasicInfo();
@@ -1545,99 +1518,13 @@
   document.getElementById('inputSearchProduct').addEventListener('input', () => renderProducts());
 
   // ===== 锁定/编辑基本信息切换 =====
-  document.getElementById('btnToggleEdit').addEventListener('click', () => {
-    if (isEditingInfo) {
-      // 取消编辑，恢复原始值
-      const oldOrder = document.getElementById('displayOrderNo').textContent;
-      const oldFrom = document.getElementById('displayFromStore').textContent;
-      const oldTo = document.getElementById('displayToStore').textContent;
-      const oldInbound = document.getElementById('displayInboundNo').textContent;
-      const oldType = document.getElementById('displayTransferType').textContent;
-      const oldNote = document.getElementById('displayNote').textContent;
-      document.getElementById('inputOrderNo').value = oldOrder !== '-' ? oldOrder : '';
-      document.getElementById('inputFromStore').value = oldFrom !== '-' ? oldFrom : '';
-      document.getElementById('inputToStore').value = oldTo !== '-' ? oldTo : '';
-      document.getElementById('inputInboundNo').value = oldInbound !== '-' ? oldInbound : '';
-      document.getElementById('inputTransferType').value = oldType !== '-' ? oldType : '';
-      document.getElementById('inputNote').value = oldNote !== '-' ? oldNote : '';
-      document.getElementById('infoEditError').style.display = 'none';
-      switchToLockedMode();
-    } else {
-      // 进入编辑态
-      document.getElementById('infoDisplay').classList.add('hidden');
-      document.getElementById('infoEdit').classList.remove('hidden');
-      document.getElementById('btnToggleEdit').textContent = '✕ 取消';
-      isEditingInfo = true;
-    }
-  });
+  
 
-  document.getElementById('btnSaveInfoEdit').addEventListener('click', () => {
-    const orderNo = document.getElementById('inputOrderNo').value.trim();
-    const fromStore = document.getElementById('inputFromStore').value.trim();
-    const toStore = document.getElementById('inputToStore').value.trim();
-    const transferType = document.getElementById('inputTransferType').value;
-    const manager = document.getElementById('inputManager').value.trim();
-    const handler = document.getElementById('inputHandler').value.trim();
-    const errEl = document.getElementById('infoEditError');
-    if (!orderNo || !fromStore || !toStore || !transferType || !manager || !handler) {
-      errEl.textContent = '请填写完整信息（单号、门店、类型、店长、经手人为必填项）';
-      errEl.style.display = 'block';
-      return;
-    }
-    if (fromStore === toStore) {
-      errEl.textContent = '调出门店和调入门店不能相同';
-      errEl.style.display = 'block';
-      return;
-    }
-    errEl.style.display = 'none';
-    // 判断单号是否变化 → 决定是否重置箱管理
-    const oldOrderNo = document.getElementById('displayOrderNo').textContent;
-    if (orderNo !== oldOrderNo) {
-      currentBoxNo = 1;
-      maxCreatedBoxNo = 1;
-    }
-    switchToLockedMode();
-    checkBasicInfo();
-    updateBoxUI();
-    toast('✅ 已更新', 'success');
-  });
+  
 
-  document.getElementById('btnResetInfoEdit').addEventListener('click', () => {
-    document.getElementById('inputOrderNo').value = '';
-    document.getElementById('inputFromStore').value = '';
-    document.getElementById('inputToStore').value = '';
-    document.getElementById('inputInboundNo').value = '';
-    document.getElementById('inputTransferType').value = '';
-    document.getElementById('inputNote').value = '';
-    document.getElementById('inputManager').value = '';
-    document.getElementById('inputHandler').value = '';
-    document.getElementById('infoEditError').style.display = 'none';
-    // 重置箱管理
-    currentBoxNo = 1;
-    maxCreatedBoxNo = 1;
-    updateBoxUI();
-    // 清空扫码结果
-    currentScan = null;
-    document.getElementById('scanResult').classList.add('hidden');
-    document.getElementById('inputQuantity').value = '';
-    checkBasicInfo();
-    toast('🔄 已重置，请重新填写', 'success');
-  });
+  
 
-  // 基本信息输入验证（编辑态下不触发实时逻辑）
-  document.getElementById('inputOrderNo').addEventListener('input', () => {
-    if (isEditingInfo) return;
-    checkBasicInfo();
-    currentBoxNo = 1;
-    maxCreatedBoxNo = 1;
-    updateBoxUI();
-  });
-  document.getElementById('inputFromStore').addEventListener('input', () => {
-    if (!isEditingInfo) checkBasicInfo();
-  });
-  document.getElementById('inputToStore').addEventListener('input', () => {
-    if (!isEditingInfo) checkBasicInfo();
-  });
+  // 基本信息输入验证已移除（扫码页精简）
 
   // ===== 箱导航事件 =====
   document.getElementById('btnNewBox').addEventListener('click', () => {
