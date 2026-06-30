@@ -1249,46 +1249,79 @@
         .then(() => toast('已分享', 'success'))
         .catch(err => {
           if (err.name !== 'AbortError') {
-            fallbackDownload(blob, filename, dataList.length);
+            downloadAsXLSX(sheetData, merges, filename, dataList.length);
           }
         });
     } else {
-      fallbackDownload(blob, filename, dataList.length);
+      downloadAsXLSX(sheetData, merges, filename, dataList.length);
     }
   }
-  // 【下载】直接下载文件到本地
-  function downloadCSVWithData(dataList, filename) {
+  // 【下载】生成真正 XLSX（带合并单元格）并下载
+  function downloadXLSXWithData(dataList, filename) {
     if (dataList.length === 0) { toast('暂无记录可下载', 'error'); return; }
-    const h = ['门店调拨单号','货源门店','目标门店','创建时间','调拨类型','门店入库单号','备注','商品编码','商品条形码','商品名称','实调数量','总计','仓库','箱号'];
-    const exportTime = nowStr();
-    const csvRows = [];
     const groups = {};
     dataList.forEach(r => {
       const key = r.orderNo || '（未填单号）';
       if (!groups[key]) groups[key] = [];
       groups[key].push(r);
     });
-    // 简单平铺导出（不合并单元格，兼容CSV）
-    csvRows.push(h.map(v => '"'+v+'"').join(','));
+    const h = ['门店调拨单号','货源门店','目标门店','创建时间','调拨类型','门店入库单号','备注','商品编码','商品条形码','商品名称','实调数量','总计','仓库','箱号'];
+    const exportTime = nowStr();
+    const sheetData = [h];
+    const merges = [];
+    let globalRow = 1;
     Object.keys(groups).forEach(orderNo => {
       const items = groups[orderNo].sort((a, b) => (a.boxNo||1) - (b.boxNo||1));
       const first = items[0];
       const totalQty = items.reduce((s, r) => s + (parseInt(r.quantity) || 0), 0);
-      items.forEach(r => {
-        csvRows.push([
-          orderNo, first.fromStore||'', first.toStore||'', exportTime,
-          first.transferType||'调拨出库', first.inboundNo||'', first.note||'',
-          r.productCode||'', r.barcode||'', r.productName||'', parseInt(r.quantity)||0,
-          totalQty, (first.fromStore||'')+'正常仓', '第'+(r.boxNo||1)+'箱'
-        ].map(v => '"'+String(v).replace(/"/g,'""')+'"').join(','));
+      const startRow = globalRow;
+      let lastBoxNo = -1;
+      let boxStartRow = globalRow;
+      items.forEach((r, idx) => {
+        const row = [];
+        const isFirstRow = idx === 0;
+        if (isFirstRow) {
+          row.push(orderNo, first.fromStore||'', first.toStore||'', exportTime,
+            first.transferType||'调拨出库', first.inboundNo||'', first.note||'');
+        } else {
+          row.push('','','','','','','');
+        }
+        row.push(r.productCode||'', r.barcode||'', r.productName||'', parseInt(r.quantity)||0);
+        row.push(isFirstRow ? totalQty : '');
+        row.push((first.fromStore||'')+'正常仓');
+        const boxNo = r.boxNo || 1;
+        if (boxNo !== lastBoxNo) {
+          if (lastBoxNo !== -1 && globalRow - 1 > boxStartRow) {
+            merges.push({s:{r:boxStartRow,c:13}, e:{r:globalRow-1,c:13}});
+          }
+          row.push('第'+boxNo+'箱');
+          lastBoxNo = boxNo;
+          boxStartRow = globalRow;
+        } else {
+          row.push('');
+        }
+        sheetData.push(row);
+        globalRow++;
       });
+      if (globalRow - 1 > boxStartRow) {
+        merges.push({s:{r:boxStartRow,c:13}, e:{r:globalRow-1,c:13}});
+      }
+      const endRow = globalRow - 1;
+      if (endRow > startRow) {
+        for (let c = 0; c <= 6; c++) merges.push({s:{r:startRow,c}, e:{r:endRow,c}});
+        merges.push({s:{r:startRow,c:11}, e:{r:endRow,c:11}});
+      }
     });
-    const csv = '\uFEFF' + csvRows.join('\n');
-    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
-    fallbackDownload(blob, filename, dataList.length);
-    toast('已下载，打开钉钉 → 点「+」→ 选择文件发送', 'success');
+    downloadAsXLSX(sheetData, merges, filename, dataList.length);
   }
-  function fallbackDownload(blob, filename, count) {
+  // 用 SheetJS 生成真正 XLSX（带合并单元格）并下载
+  function downloadAsXLSX(sheetData, merges, filename, count) {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(sheetData);
+    if (merges.length > 0) ws['!merges'] = merges;
+    XLSX.utils.book_append_sheet(wb, ws, '调拨单');
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = filename+'.xlsx';
@@ -1827,7 +1860,7 @@
     if (checkedOrders.size === 0) { toast('请先选择要导出的单据', 'error'); return; }
     const filtered = transfers.filter(r => checkedOrders.has(r.orderNo || '（未填单号）'));
     if (filtered.length === 0) { toast('所选单据无记录', 'error'); return; }
-    downloadCSVWithData(filtered, '调拨记录_选中_'+today());
+    downloadXLSXWithData(filtered, '调拨记录_选中_'+today());
   });
 
   // 清空记录
