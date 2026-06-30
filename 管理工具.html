@@ -433,13 +433,13 @@
       const payload = { v: version, c: items.length, items };
 
       // 2. AES Encrypt
+      progressText.textContent = '正在加密数据（共 ' + items.length.toLocaleString() + ' 条）...';
       const jsonStr = JSON.stringify(payload);
       const encrypted = CryptoJS.AES.encrypt(jsonStr, SECRET_KEY).toString();
 
-      // 3. Encode for GitHub API
-      const content = btoa(encrypted);
-
-      progressText.textContent = '正在上传到 GitHub...';
+      // 3. Encode for GitHub API（使用 Blob 方式，支持大数据量）
+      progressText.textContent = '正在编码数据包...';
+      const content = await blobEncodeBase64(encrypted);
 
       // 4. Get existing file SHA if any
       let sha = null;
@@ -530,6 +530,22 @@
   }
 
   // ===== Utilities =====
+  // 使用 Blob+FileReader 方式对大字符串做 base64 编码，避免 btoa 内存溢出
+  function blobEncodeBase64(str) {
+    return new Promise(function(resolve, reject) {
+      try {
+        var blob = new Blob([str], { type: 'text/plain;charset=utf-8' });
+        var reader = new FileReader();
+        reader.onload = function() {
+          var dataUrl = reader.result;
+          var base64 = dataUrl.split(',')[1];
+          resolve(base64);
+        };
+        reader.onerror = function() { reject(new Error('编码失败')); };
+        reader.readAsDataURL(blob);
+      } catch(e) { reject(e); }
+    });
+  }
   function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
   function toast(msg, type) {
     const el = document.createElement('div');
