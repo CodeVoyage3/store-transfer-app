@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap');
     * { font-family: 'Noto Sans SC', -apple-system, sans-serif; }
@@ -432,12 +433,20 @@
       const version = versionInput.value.trim() || new Date().toISOString().slice(0, 10) + ' v' + Date.now().toString(36);
       const payload = { v: version, c: items.length, items };
 
-      // 2. AES Encrypt
-      progressText.textContent = '正在加密数据（共 ' + items.length.toLocaleString() + ' 条）...';
+      // 2. 压缩 + AES Encrypt
+      progressText.textContent = '正在压缩数据（共 ' + items.length.toLocaleString() + ' 条）...';
       const jsonStr = JSON.stringify(payload);
-      const encrypted = CryptoJS.AES.encrypt(jsonStr, SECRET_KEY).toString();
+      const compressed = pako.gzip(jsonStr, { level: 9 });
+      // Uint8Array → base64
+      let binary = '';
+      const cBytes = new Uint8Array(compressed);
+      for (let i = 0; i < cBytes.byteLength; i++) { binary += String.fromCharCode(cBytes[i]); }
+      const compressedB64 = btoa(binary);
+      
+      progressText.textContent = '正在加密数据（已压缩至 ' + (compressedB64.length / 1024).toFixed(0) + 'KB）...';
+      const encrypted = CryptoJS.AES.encrypt(compressedB64, SECRET_KEY).toString();
 
-      // 3. Encode for GitHub API（使用 Blob 方式，支持大数据量）
+      // 3. Encode for GitHub API
       progressText.textContent = '正在编码数据包...';
       const content = await blobEncodeBase64(encrypted);
 
