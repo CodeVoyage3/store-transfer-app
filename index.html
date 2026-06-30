@@ -768,14 +768,9 @@
 
   // ===== 基本信息验证 =====
   function checkBasicInfo() {
-    // 始终显示扫码区域
-    const wrapper = document.getElementById('scanSectionContent');
+    // 扫码页始终可用
     const btn = document.getElementById('btnOpenScanner');
-    const text = document.getElementById('scanIconText');
-    wrapper.classList.remove('hidden');
-    btn.classList.remove('disabled');
-    text.textContent = '扫一扫';
-    text.style.color = '#374151';
+    if (btn) { btn.classList.remove('disabled'); }
   }
 
   // ===== 锁定/编辑切换 =====
@@ -2109,17 +2104,9 @@
     }
   });
 
-  // 初始检查基本信息状态（不自动弹窗，等用户点击扫码时才弹）
+  // 初始化扫码页和箱管理
   checkBasicInfo();
   updateBoxUI();
-  // 初始无数据时，直接显示编辑模式，方便用户填写
-  const initOrderNo = document.getElementById('inputOrderNo').value.trim();
-  if (!initOrderNo) {
-    document.getElementById('infoDisplay').classList.add('hidden');
-    document.getElementById('infoEdit').classList.remove('hidden');
-    document.getElementById('btnToggleEdit').style.display = 'none';
-    isEditingInfo = true;
-  }
 
 })();
 </script>
