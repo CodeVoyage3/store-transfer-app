@@ -577,6 +577,37 @@
   </div>
 </div>
 
+<!-- ===== 导出时填写调拨信息弹窗 ===== -->
+<div id="exportInfoModal" class="modal">
+  <div class="modal-box">
+    <div class="flex-between mb-3">
+      <span style="font-size:17px;font-weight:700;">📋 填写调拨信息</span>
+      <button class="modalClose" data-modal="exportInfoModal" style="background:none;border:none;font-size:22px;color:#9CA3AF;cursor:pointer;">✕</button>
+    </div>
+    <p style="font-size:13px;color:#9CA3AF;margin-bottom:10px;">填写以下信息后即可导出</p>
+    <div class="mb-2"><label>调拨单号 *</label><input id="exportInfoOrderNo" class="input" placeholder="如：RVKKT/RFKRK开头" /></div>
+    <div class="grid-2 mb-2">
+      <div><label>调出门店 *</label><input id="exportInfoFromStore" class="input" placeholder="如：东莞壹号广场KKV店" /></div>
+      <div><label>调入门店 *</label><input id="exportInfoToStore" class="input" placeholder="如：东莞厚街万达广场KKV店" /></div>
+    </div>
+    <div class="mb-2"><label>门店入库单号</label><input id="exportInfoInboundNo" class="input" placeholder="如：TPA4000001298231" /></div>
+    <div class="mb-2"><label>调拨类型 *</label>
+      <select id="exportInfoTransferType" class="input">
+        <option value="">请选择</option>
+        <option value="计调发起">计调发起</option>
+        <option value="门店创建">门店创建</option>
+      </select>
+    </div>
+    <div class="mb-2"><label>备注</label><textarea id="exportInfoNote" class="input" placeholder="非必填" rows="2" style="resize:none;"></textarea></div>
+    <div class="grid-2 mb-2">
+      <div><label>店长 *</label><input id="exportInfoManager" class="input" placeholder="店长姓名" /></div>
+      <div><label>经手人 *</label><input id="exportInfoHandler" class="input" placeholder="经手人姓名" /></div>
+    </div>
+    <div id="exportInfoError" class="text-sm" style="display:none;background:#FEF2F2;color:#DC2626;border-radius:10px;padding:10px 14px;margin-bottom:6px;font-weight:500;"></div>
+    <button id="btnExportInfoConfirm" class="btn btn-green" style="margin-top:4px;">✅ 确认并导出</button>
+  </div>
+</div>
+
 <!-- ===== 成功录入弹窗（居中显示） ===== -->
 <div id="successPopup" class="confirm-overlay">
   <div class="confirm-box" style="padding:32px 24px 28px;text-align:center;">
@@ -799,26 +830,14 @@
 
   // ===== 基本信息验证 =====
   function checkBasicInfo() {
-    const orderNo = document.getElementById('inputOrderNo').value.trim();
-    const fromStore = document.getElementById('inputFromStore').value.trim();
-    const toStore = document.getElementById('inputToStore').value.trim();
-    const transferType = document.getElementById('inputTransferType').value;
-    const sameStore = fromStore && toStore && fromStore === toStore;
-    const ok = orderNo && fromStore && toStore && transferType && !sameStore;
+    // 始终显示扫码区域
     const wrapper = document.getElementById('scanSectionContent');
     const btn = document.getElementById('btnOpenScanner');
     const text = document.getElementById('scanIconText');
-    if (ok) {
-      wrapper.classList.remove('hidden');
-      btn.classList.remove('disabled');
-      text.textContent = '扫一扫';
-      text.style.color = '#374151';
-    } else {
-      wrapper.classList.add('hidden');
-      btn.classList.add('disabled');
-      text.textContent = '请先填写基本信息';
-      text.style.color = '#9CA3AF';
-    }
+    wrapper.classList.remove('hidden');
+    btn.classList.remove('disabled');
+    text.textContent = '扫一扫';
+    text.style.color = '#374151';
   }
 
   // ===== 锁定/编辑切换 =====
@@ -1476,11 +1495,8 @@
     document.getElementById('inputHandler').value = document.getElementById('infoHandler').value.trim();
     document.getElementById('infoModal').classList.remove('open');
     switchToLockedMode();
-    currentBoxNo = 1;
-    maxCreatedBoxNo = 1;
     checkBasicInfo();
     updateBoxUI();
-    switchTab('sectionScan');
     toast('✅ 已设置调拨单：' + orderNo, 'success');
   });
 
@@ -1494,17 +1510,8 @@
     b.addEventListener('click', () => switchTab(b.dataset.section));
   });
 
-  // 扫码图标点击 - 未填写基本信息时弹出填写弹窗
+  // 扫码图标点击 - 直接打开扫码
   document.getElementById('btnOpenScanner').addEventListener('click', () => {
-    const orderNo = document.getElementById('inputOrderNo').value.trim();
-    const fromStore = document.getElementById('inputFromStore').value.trim();
-    const toStore = document.getElementById('inputToStore').value.trim();
-    const transferType = document.getElementById('inputTransferType').value;
-    if (!orderNo || !fromStore || !toStore || !transferType) {
-      document.getElementById('infoModal').classList.add('open');
-      document.getElementById('infoOrderNo').focus();
-      return;
-    }
     openScanner();
   });
 
@@ -1549,33 +1556,35 @@
       document.getElementById('scanResult').classList.add('hidden');
       return;
     }
-    const orderNo = document.getElementById('inputOrderNo').value.trim();
     const barcode = currentScan.barcode;
     const productName = currentScan.product ? currentScan.product.name : '未查到商品信息';
+    const currentOrderNo = document.getElementById('inputOrderNo').value.trim();
     // 查找同单号+同箱号+同条码的已有记录 → 叠加数量
-    const existing = transfers.find(t => t.orderNo === orderNo && t.boxNo === currentBoxNo && t.barcode === barcode);
+    const existing = transfers.find(t => t.orderNo === currentOrderNo && t.boxNo === currentBoxNo && t.barcode === barcode);
     let totalQty;
+    let newRecord = false;
     if (existing) {
       existing.quantity = (parseInt(existing.quantity) || 0) + qty;
       existing.timestamp = new Date().toISOString();
       totalQty = existing.quantity;
     } else {
+      newRecord = true;
       transfers.unshift({
         id: uid(),
-        orderNo: orderNo,
+        orderNo: currentOrderNo,
         boxNo: currentBoxNo,
         barcode: barcode,
         productName: productName,
         productCode: (currentScan.product && currentScan.product.code) || '',
         quantity: qty,
         unit: (currentScan.product && currentScan.product.unit) || '个',
-        fromStore: document.getElementById('inputFromStore').value.trim(),
-        toStore: document.getElementById('inputToStore').value.trim(),
-        inboundNo: document.getElementById('inputInboundNo').value.trim(),
-        transferType: document.getElementById('inputTransferType').value,
-        note: document.getElementById('inputNote').value.trim(),
-        storeManager: document.getElementById('inputManager').value.trim(),
-        handler: document.getElementById('inputHandler').value.trim(),
+        fromStore: '',
+        toStore: '',
+        inboundNo: '',
+        transferType: '',
+        note: '',
+        storeManager: '',
+        handler: '',
         timestamp: new Date().toISOString()
       });
       totalQty = qty;
@@ -1854,6 +1863,7 @@
   document.getElementById('productModal').addEventListener('click', e => { if (e.target === e.currentTarget) e.target.classList.remove('open'); });
   document.getElementById('recordModal').addEventListener('click', e => { if (e.target === e.currentTarget) e.target.classList.remove('open'); });
   document.getElementById('infoModal').addEventListener('click', e => { if (e.target === e.currentTarget) e.target.classList.remove('open'); });
+  document.getElementById('exportInfoModal').addEventListener('click', e => { if (e.target === e.currentTarget) e.target.classList.remove('open'); });
 
   // 保存记录
   document.getElementById('btnSaveRecord').addEventListener('click', () => {
@@ -1957,6 +1967,32 @@
     }
   });
 
+  // 检查选中记录是否缺少调拨信息，如缺少则弹出填写窗
+  function ensureExportInfo(filtered, filename, isDownload) {
+    // 检查是否已有任何调拨信息
+    const hasInfo = filtered.some(r => r.orderNo && r.fromStore && r.toStore);
+    if (hasInfo) {
+      doExport(filtered, filename, isDownload);
+      return;
+    }
+    // 弹出填写窗口
+    const modal = document.getElementById('exportInfoModal');
+    modal.classList.add('open');
+    document.getElementById('exportInfoOrderNo').focus();
+    modal.dataset.filename = filename;
+    modal.dataset.isDownload = isDownload ? '1' : '0';
+    // 保存filtered数据的引用
+    window._exportData = filtered;
+  }
+
+  function doExport(filtered, filename, isDownload) {
+    if (isDownload) {
+      downloadXLSXWithData(filtered, filename);
+    } else {
+      exportCSVWithData(filtered, filename);
+    }
+  }
+
   // 导出选中
   document.getElementById('btnExportSelected').addEventListener('click', () => {
     const checkedOrders = new Set();
@@ -1964,17 +2000,57 @@
     if (checkedOrders.size === 0) { toast('请先选择要导出的单据', 'error'); return; }
     const filtered = transfers.filter(r => checkedOrders.has(r.orderNo || '（未填单号）'));
     if (filtered.length === 0) { toast('所选单据无记录', 'error'); return; }
-    exportCSVWithData(filtered, '调拨记录_选中_'+today());
+    ensureExportInfo(filtered, '调拨记录_选中_'+today(), false);
   });
 
-  // 下载选中（直接下载CSV）
+  // 下载选中
   document.getElementById('btnDownloadSelected').addEventListener('click', () => {
     const checkedOrders = new Set();
     document.querySelectorAll('.order-check:checked').forEach(cb => checkedOrders.add(cb.dataset.order));
     if (checkedOrders.size === 0) { toast('请先选择要导出的单据', 'error'); return; }
     const filtered = transfers.filter(r => checkedOrders.has(r.orderNo || '（未填单号）'));
     if (filtered.length === 0) { toast('所选单据无记录', 'error'); return; }
-    downloadXLSXWithData(filtered, '调拨记录_选中_'+today());
+    ensureExportInfo(filtered, '调拨记录_选中_'+today(), true);
+  });
+
+  // 导出信息确认弹窗提交
+  document.getElementById('btnExportInfoConfirm').addEventListener('click', () => {
+    const orderNo = document.getElementById('exportInfoOrderNo').value.trim();
+    const fromStore = document.getElementById('exportInfoFromStore').value.trim();
+    const toStore = document.getElementById('exportInfoToStore').value.trim();
+    const transferType = document.getElementById('exportInfoTransferType').value;
+    const manager = document.getElementById('exportInfoManager').value.trim();
+    const handler = document.getElementById('exportInfoHandler').value.trim();
+    const inboundNo = document.getElementById('exportInfoInboundNo').value.trim();
+    const note = document.getElementById('exportInfoNote').value.trim();
+    const errEl = document.getElementById('exportInfoError');
+    if (!orderNo || !fromStore || !toStore || !transferType || !manager || !handler) {
+      errEl.textContent = '请填写完整信息（单号、门店、类型、店长、经手人为必填项）';
+      errEl.style.display = 'block'; return;
+    }
+    if (fromStore === toStore) { errEl.textContent = '调出门店和调入门店不能相同'; errEl.style.display = 'block'; return; }
+    errEl.style.display = 'none';
+
+    // 应用到当前调拨单的所有记录
+    const filtered = window._exportData || [];
+    filtered.forEach(function(r) {
+      r.orderNo = orderNo;
+      r.fromStore = fromStore;
+      r.toStore = toStore;
+      r.inboundNo = inboundNo;
+      r.transferType = transferType;
+      r.note = note;
+      r.storeManager = manager;
+      r.handler = handler;
+    });
+    // 同步保存到 localStorage
+    saveTransfers();
+    renderRecords();
+
+    document.getElementById('exportInfoModal').classList.remove('open');
+    const filename = document.getElementById('exportInfoModal').dataset.filename || '调拨记录_选中_'+today();
+    const isDownload = document.getElementById('exportInfoModal').dataset.isDownload === '1';
+    doExport(filtered, filename, isDownload);
   });
 
   // 清空记录
