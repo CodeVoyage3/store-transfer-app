@@ -677,18 +677,30 @@
       encrypted = localStorage.getItem(LS_REMOTE_CACHE);
     }
     if (!encrypted) return;
+    let data = null;
+    // 尝试新格式（gzip压缩）
     try {
       const bytes = CryptoJS.AES.decrypt(encrypted, SECRET_KEY);
       const compressedB64 = bytes.toString(CryptoJS.enc.Utf8);
-      if (!compressedB64) return;
-      // Base64 → Uint8Array → 解压
-      const binStr = atob(compressedB64);
-      const u8arr = new Uint8Array(binStr.length);
-      for (let i = 0; i < binStr.length; i++) { u8arr[i] = binStr.charCodeAt(i); }
-      const decompressed = pako.inflate(u8arr);
-      const decrypted = new TextDecoder().decode(decompressed);
-      const data = JSON.parse(decrypted);
-      if (data && data.items && data.items.length) {
+      if (compressedB64) {
+        const binStr = atob(compressedB64);
+        const u8arr = new Uint8Array(binStr.length);
+        for (let i = 0; i < binStr.length; i++) { u8arr[i] = binStr.charCodeAt(i); }
+        const decompressed = pako.inflate(u8arr);
+        const decrypted = new TextDecoder().decode(decompressed);
+        data = JSON.parse(decrypted);
+      }
+    } catch(e) {}
+    // 兼容旧格式（无压缩）
+    if (!data) {
+      try {
+        const bytes = CryptoJS.AES.decrypt(encrypted, SECRET_KEY);
+        const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+        if (decrypted) data = JSON.parse(decrypted);
+      } catch(e2) {}
+    }
+    if (data) {
+      if (data.items && data.items.length) {
         remoteProductMap = new Map();
         data.items.forEach(function(item) {
           if (item.b) remoteProductMap.set(item.b, { n: item.n || '', c: item.c || '' });
@@ -697,7 +709,7 @@
         var el = document.getElementById('remoteStatus');
         if (el) el.textContent = '📦 ' + remoteProductMap.size + ' 条 已同步';
       }
-    } catch(e) {}
+    }
   }
   // 超过15天未打开则自动清空数据
   function checkExpiration() {
