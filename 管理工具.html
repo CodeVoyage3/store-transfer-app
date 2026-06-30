@@ -175,6 +175,7 @@
   const SECRET_KEY = 'KkV_Tr@nsf3r#2026!';
   const LS_TOKEN = 'mgmt_gh_token';
   const LS_HISTORY = 'mgmt_publish_history';
+  const LS_BARCODES = 'mgmt_uploaded_barcodes';
 
   // DOM refs
   const $ = id => document.getElementById(id);
@@ -412,11 +413,18 @@
     publishStatus.className = 'tag bg-amber-50 text-amber-600 text-xs ml-auto pulse';
 
     try {
-      // 0. 拉取已有数据，准备去重
-      progressText.textContent = '正在拉取已有数据对比去重...';
+      // 0. 从本地缓存读取已上传的条码（无需从GitHub下载解密）
+      progressText.textContent = '正在加载本地缓存对比去重...';
       let existingBarcodes = new Set();
-      let existingItems = [];
       let sha = null;
+      try {
+        const cached = localStorage.getItem(LS_BARCODES);
+        if (cached) {
+          const barcodes = JSON.parse(cached);
+          barcodes.forEach(function(b) { existingBarcodes.add(b); });
+        }
+      } catch(e) {}
+      // 获取GitHub上文件的SHA（仅用于更新）
       try {
         const getResp = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE_PATH}`, {
           headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json', 'User-Agent': 'store-mgmt' }
@@ -424,23 +432,10 @@
         if (getResp.ok) {
           const fileInfo = await getResp.json();
           sha = fileInfo.sha;
-          const rawResp = await fetch(fileInfo.download_url);
-          if (rawResp.ok) {
-            const encrypted = await rawResp.text();
-            if (encrypted && encrypted.length > 50) {
-              const decoded = decryptRemoteData(encrypted);
-              if (decoded && decoded.items) {
-                existingItems = decoded.items;
-                decoded.items.forEach(function(item) {
-                  if (item.b) existingBarcodes.add(item.b);
-                });
-              }
-            }
-          }
         }
       } catch(e) {}
 
-      progressText.textContent = '已有 ' + existingItems.length.toLocaleString() + ' 条数据，正在对比去重...';
+      progressText.textContent = '已有 ' + existingBarcodes.size.toLocaleString() + ' 条已上传，正在对比去重...';
 
       // 1. 处理CSV数据（过滤ZB、拆分多条码、去重）
       const newItems = [];
@@ -462,8 +457,8 @@
         throw new Error('全部 ' + skipCount.toLocaleString() + ' 条条码都已上传过，无需重复上传');
       }
 
-      // 合并已有数据 + 新增数据 = 完整数据集
-      const allItems = existingItems.concat(newItems);
+      // 新增数据作为完整数据集上传
+      const allItems = newItems;
       const version = versionInput.value.trim() || new Date().toISOString().slice(0, 10) + ' v' + Date.now().toString(36);
       const payload = { v: version, c: allItems.length, items: allItems };
 
@@ -503,10 +498,15 @@
         throw new Error('GitHub API 错误: ' + (err.message || putResp.statusText));
       }
 
-      // 5. Record publish history
-      addHistory(version, allItems.length);
+      // 5. 保存条码到本地缓存（下次上传自动去重）
+      const allBarcodes = Array.from(existingBarcodes);
+      newItems.forEach(function(item) { allBarcodes.push(item.b); });
+      try { localStorage.setItem(LS_BARCODES, JSON.stringify(allBarcodes)); } catch(e) {}
 
-      progressText.textContent = '✅ 发布成功！新增 ' + newItems.length.toLocaleString() + ' 条，合并共 ' + allItems.length.toLocaleString() + ' 条';
+      // 6. Record publish history
+      addHistory(version, newItems.length);
+
+      progressText.textContent = '✅ 发布成功！新增 ' + newItems.length.toLocaleString() + ' 条，跳过 ' + skipCount.toLocaleString() + ' 条重复，共 ' + allBarcodes.length.toLocaleString() + ' 条';
       publishStatus.textContent = '✅ 已发布';
       publishStatus.className = 'tag bg-green-50 text-green-600 text-xs ml-auto';
 
@@ -527,27 +527,6 @@
       }, 3000);
       toast('❌ 发布失败: ' + err.message, 'error');
     }
-  }
-
-  // ===== 解密远程数据（兼容新旧两种格式） =====
-  function decryptRemoteData(encrypted) {
-    try {
-      const bytes = CryptoJS.AES.decrypt(encrypted, SECRET_KEY);
-      const compressedB64 = bytes.toString(CryptoJS.enc.Utf8);
-      if (compressedB64) {
-        const binStr = atob(compressedB64);
-        const u8arr = new Uint8Array(binStr.length);
-        for (let i = 0; i < binStr.length; i++) { u8arr[i] = binStr.charCodeAt(i); }
-        const decompressed = pako.inflate(u8arr);
-        return JSON.parse(new TextDecoder().decode(decompressed));
-      }
-    } catch(e) {}
-    try {
-      const bytes = CryptoJS.AES.decrypt(encrypted, SECRET_KEY);
-      const decrypted = bytes.toString(CryptoJS.enc.Utf8);
-      if (decrypted) return JSON.parse(decrypted);
-    } catch(e2) {}
-    return null;
   }
 
   // ===== History =====
