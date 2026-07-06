@@ -314,6 +314,8 @@
       <div style="display:flex;align-items:center;justify-content:space-between;">
         <div style="display:flex;align-items:center;gap:6px;">
           <span style="font-size:13px;font-weight:600;color:#374151;">🏪 调拨单</span>
+          <span id="batchStoreFromTag" style="display:none;font-size:11px;color:#374151;background:#F3F4F6;padding:1px 10px;border-radius:10px;"></span>
+          <span id="batchStoreArrow" style="display:none;font-size:11px;color:#9CA3AF;">→</span>
           <span id="batchStoreTag" style="display:none;font-size:11px;color:#4F46E5;background:#EEF2FF;padding:1px 10px;border-radius:10px;"></span>
         </div>
         <div style="display:none;gap:6px;" id="batchActionBtns">
@@ -372,6 +374,14 @@
       </div>
       <div class="mb-2"><label>条码</label><div id="scanBarcode" class="text-sm font-mono" style="font-weight:500;">-</div></div>
       <div class="mb-2"><label>商品名称</label><div id="scanProductName" style="font-size:15px;font-weight:600;">-</div></div>
+      <!-- 手动添加商品（条码未查到时显示） -->
+      <div id="scanAddProduct" class="hidden" style="margin-bottom:8px;padding:10px 12px;background:#FEF2F2;border-radius:10px;">
+        <div style="font-size:12px;color:#DC2626;font-weight:500;margin-bottom:6px;">⚠️ 该条码未查到商品信息，请手动添加</div>
+        <div class="flex-row" style="gap:6px;">
+          <input id="inputManualName" class="input" style="flex:1;" placeholder="输入商品名称" />
+          <button id="btnAddManualProduct" class="btn btn-sm btn-green" style="width:auto;white-space:nowrap;padding:8px 12px;">➕ 添加</button>
+        </div>
+      </div>
       <div id="scanCodeRow" class="mb-2 hidden"><label>商品编码</label><div id="scanProductCode" class="text-sm font-mono" style="color:#6B7280;">-</div></div>
       <div class="mb-2"><label>箱号</label><div id="scanBoxNo" style="font-size:15px;font-weight:600;color:#4F46E5;">第 1 箱</div></div>
       <div id="scanBatchRow" class="mb-2"><label>归属调拨单</label><div id="scanBatchInfo" style="font-size:13px;font-weight:500;color:#059669;">-</div></div>
@@ -400,11 +410,12 @@
         <span>全选</span>
       </label>
       <span id="selectedCount" style="font-size:12px;color:#9CA3AF;flex:1;">已选 0 张单据</span>
-      <button id="btnExportSelected" class="btn btn-sm btn-outline" style="gap:4px;padding:4px 10px;font-size:11px;color:#059669;border-color:#059669;">
-        📤 分享
-      </button>
+
       <button id="btnDownloadSelected" class="btn btn-sm btn-outline" style="gap:4px;padding:4px 10px;font-size:11px;color:#374151;border-color:#D1D5DB;">
-        📥 下载
+        🖨️ 打印
+      </button>
+      <button id="btnExportKPOS" class="btn btn-sm btn-outline" style="gap:4px;padding:4px 10px;font-size:11px;color:#DC2626;border-color:#DC2626;">
+        📦 导出到KPOS
       </button>
     </div>
     <div class="flex-row" style="margin-bottom:10px;gap:6px;">
@@ -532,7 +543,10 @@
       <button id="btnCloseSetup" style="background:none;border:none;font-size:22px;color:#9CA3AF;cursor:pointer;">✕</button>
     </div>
     <p style="font-size:13px;color:#9CA3AF;margin-bottom:10px;">请填写调拨信息后开始扫码</p>
-    <div class="mb-2"><label>调入门店 *</label><input id="setupStoreDest" class="input" placeholder="如：东莞壹号广场KKV店" /></div>
+    <div class="grid-2 mb-2">
+      <div><label>调出门店 *</label><input id="setupStoreFrom" class="input" placeholder="如：东莞厚街万达广场KKV店" /></div>
+      <div><label>调入门店 *</label><input id="setupStoreDest" class="input" placeholder="如：东莞壹号广场KKV店" /></div>
+    </div>
     <div class="mb-2"><label>单据数量 *</label>
       <input id="setupBatchCount" type="number" min="1" step="1" class="input" placeholder="如：3" value="1" />
     </div>
@@ -612,6 +626,7 @@
   let maxCreatedBoxNo = 1;
   // 调拨单管理
   let batchStoreName = '';
+  let batchStoreFrom = '';
   let batchTotalCount = 1;
   let currentBatchNo = 1;
 
@@ -708,6 +723,9 @@
         var el = document.getElementById('remoteStatus');
         if (el) el.textContent = '📦 ' + remoteProductMap.size + ' 条 已同步';
       }
+    } else {
+      var el2 = document.getElementById('remoteStatus');
+      if (el2 && !el2.textContent) el2.textContent = '⚠️ 远程未加载';
     }
   }
   // 超过15天未打开则自动清空数据
@@ -716,6 +734,7 @@
     const lastVisit = tryLoad(KEY_LAST_VISIT);
     if (lastVisit !== null) {
       const daysPassed = (now - lastVisit) / (24 * 60 * 60 * 1000);
+      console.log('[诊断] 距上次访问天数:', daysPassed, '超过15天则清空数据');
       if (daysPassed > 15) {
         products = [];
         transfers = [];
@@ -842,6 +861,8 @@
   function updateBatchUI() {
     const card = document.getElementById('batchCard');
     const storeTag = document.getElementById('batchStoreTag');
+    const storeFromTag = document.getElementById('batchStoreFromTag');
+    const storeArrow = document.getElementById('batchStoreArrow');
     const batchControl = document.getElementById('batchControl');
     const noDisplay = document.getElementById('batchNoDisplay');
     const totalDisplay = document.getElementById('batchTotalDisplay');
@@ -851,6 +872,9 @@
     const actionBtns = document.getElementById('batchActionBtns');
     if (batchStoreName) {
       card.style.display = 'block';
+      storeFromTag.style.display = 'inline';
+      storeFromTag.textContent = batchStoreFrom || '（未填）';
+      storeArrow.style.display = 'inline';
       storeTag.style.display = 'inline';
       storeTag.textContent = batchStoreName;
       actionBtns.style.display = 'inline-flex';
@@ -868,6 +892,8 @@
       }
     } else {
       card.style.display = 'none';
+      storeFromTag.style.display = 'none';
+      storeArrow.style.display = 'none';
       storeTag.style.display = 'none';
       batchControl.style.display = 'none';
       actionBtns.style.display = 'none';
@@ -898,7 +924,8 @@
   async function openScanner() {
     if (!batchStoreName) {
       document.getElementById('batchSetupModal').classList.add('open');
-      document.getElementById('setupStoreDest').focus();
+      document.getElementById('setupStoreFrom').value = batchStoreFrom;
+      document.getElementById('setupStoreFrom').focus();
       return;
     }
     const overlay = document.getElementById('scannerOverlay');
@@ -1045,6 +1072,16 @@
     r.classList.remove('hidden');
     document.getElementById('scanBarcode').textContent = code;
     document.getElementById('scanProductName').textContent = matched ? matched.name : '未查到商品信息';
+    // 手动添加商品区域：未查到时显示，查到时隐藏
+    const addSection = document.getElementById('scanAddProduct');
+    if (matched) {
+      addSection.classList.add('hidden');
+      setTimeout(() => document.getElementById('inputQuantity').focus(), 300);
+    } else {
+      addSection.classList.remove('hidden');
+      document.getElementById('inputManualName').value = '';
+      setTimeout(() => document.getElementById('inputManualName').focus(), 300);
+    }
     if (matched && matched.code) {
       document.getElementById('scanProductCode').textContent = matched.code;
       document.getElementById('scanCodeRow').classList.remove('hidden');
@@ -1060,7 +1097,6 @@
     } else {
       document.getElementById('scanBatchRow').style.display = 'none';
     }
-    setTimeout(() => document.getElementById('inputQuantity').focus(), 300);
   }
 
   // ===== 关闭全屏扫码 =====
@@ -1080,7 +1116,8 @@
     document.getElementById(tabMap[sectionId]).classList.add('active');
     if (sectionId === 'sectionScan' && !batchStoreName) {
       document.getElementById('batchSetupModal').classList.add('open');
-      document.getElementById('setupStoreDest').focus();
+      document.getElementById('setupStoreFrom').value = batchStoreFrom;
+      document.getElementById('setupStoreFrom').focus();
     }
     if (sectionId === 'sectionRecords') { updateStoreFilter(); renderRecords(); }
     if (sectionId === 'sectionProducts') renderProducts();
@@ -1457,10 +1494,61 @@
     exportCSVWithData(transfers, '调拨记录_'+today());
   }
 
+  // ===== 导出到KPOS（匹配KPOS导入模板格式） =====
+  function exportKPOS() {
+    const checkedOrders = new Set();
+    document.querySelectorAll('.order-check:checked').forEach(cb => checkedOrders.add(cb.dataset.order));
+    if (checkedOrders.size === 0) { toast('请先选择要导出的单据', 'error'); return; }
+    const filtered = transfers.filter(r => checkedOrders.has((r.storeDest || '未填门店') + '|' + (r.batchNo || 1)));
+    if (filtered.length === 0) { toast('所选单据无记录', 'error'); return; }
+
+    // KPOS模板格式：与门店调拨单-调拨商品 (4)(2).xlsx 表头完全一致
+    const headers = ['商品编码', '商品条形码', '商品名称', '调拨数量', '', '批号'];
+    const sheetData = [headers];
+
+    // 按门店+单号分组后排序输出
+    const groups = {};
+    filtered.forEach(r => {
+      const key = (r.storeDest || '未填门店') + '|' + (r.batchNo || 1);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(r);
+    });
+
+    Object.keys(groups).forEach(key => {
+      groups[key].forEach(r => {
+        sheetData.push([
+          r.productCode || '',    // A-商品编码
+          r.barcode || '',        // B-商品条形码
+          r.productName || '',    // C-商品名称
+          parseInt(r.quantity) || 0, // D-调拨数量
+          '',                     // E-说明（留空）
+          ''                      // F-批号（留空）
+        ]);
+      });
+    });
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(sheetData);
+    // 设置列宽（匹配模板）
+    ws['!cols'] = [{wch:18}, {wch:20}, {wch:30}, {wch:12}, {wch:10}, {wch:12}];
+    XLSX.utils.book_append_sheet(wb, ws, '调拨商品');
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = '调拨商品_KPOS_'+today()+'.xlsx';
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+    toast('✅ 已导出 ' + filtered.length + ' 条商品到KPOS格式', 'success');
+  }
+
   // ===== Init =====
   loadData();
   checkExpiration();
+  console.log('[诊断] 本地products数量:', products.length);
+  if (products.length > 0) console.log('[诊断] 示例条码:', products[0].barcode);
   await fetchRemoteProducts();
+  console.log('[诊断] 远程商品remoteProductMap数量:', remoteProductMap.size);
   renderProducts();
   renderRecords();
   renderLatestRecords();
@@ -1498,6 +1586,37 @@
     document.getElementById('inputQuantity').value = '';
   });
 
+  // 手动添加商品（条码未查到时）
+  document.getElementById('btnAddManualProduct').addEventListener('click', () => {
+    const name = document.getElementById('inputManualName').value.trim();
+    if (!name) { toast('请输入商品名称', 'error'); return; }
+    const barcode = currentScan ? currentScan.barcode : '';
+    if (!barcode) { toast('请先扫码', 'error'); return; }
+    // 检查是否重复
+    if (products.some(p => p.barcode === barcode)) {
+      toast('该条码已在商品库中，可直接使用', 'info');
+      currentScan.product = products.find(p => p.barcode === barcode);
+      document.getElementById('scanProductName').textContent = currentScan.product.name;
+      document.getElementById('scanAddProduct').classList.add('hidden');
+      document.getElementById('inputQuantity').focus();
+      return;
+    }
+    products.push({ barcode, name, code: '', unit: '个', spec: '', createdAt: new Date().toISOString() });
+    saveProducts();
+    currentScan.product = { barcode, name, code: '', unit: '个' };
+    document.getElementById('scanProductName').textContent = name;
+    document.getElementById('scanAddProduct').classList.add('hidden');
+    toast('✅ 已添加：' + name, 'success');
+    setTimeout(() => document.getElementById('inputQuantity').focus(), 300);
+  });
+  // 手动添加回车确认
+  document.getElementById('inputManualName').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      document.getElementById('btnAddManualProduct').click();
+    }
+  });
+
   // 输入数量后自动确认（同单号+同箱号+同条码自动叠加数量）
   let quantityTimer = null;
   function doConfirm() {
@@ -1505,7 +1624,7 @@
     const qty = parseInt(document.getElementById('inputQuantity').value);
     if (!qty || qty < 1) return;
     if (!currentScan.product) {
-      toast('未查到商品信息，不允许保存，请先在商品库添加该条码', 'error');
+      toast('未查到商品信息，请在下方输入名称后点击「➕ 添加」', 'error');
       document.getElementById('inputQuantity').value = '';
       currentScan = null;
       document.getElementById('scanResult').classList.add('hidden');
@@ -1645,11 +1764,20 @@
 
   // ===== 调拨单导航事件 =====
   document.getElementById('btnSetupConfirm').addEventListener('click', () => {
+    const storeFrom = document.getElementById('setupStoreFrom').value.trim();
     const store = document.getElementById('setupStoreDest').value.trim();
     const countRaw = document.getElementById('setupBatchCount').value.trim();
     const errEl = document.getElementById('setupError');
+    if (!storeFrom) {
+      errEl.textContent = '请输入调出门店';
+      errEl.style.display = 'block'; return;
+    }
     if (!store) {
       errEl.textContent = '请输入调入门店';
+      errEl.style.display = 'block'; return;
+    }
+    if (storeFrom === store) {
+      errEl.textContent = '调出门店和调入门店不能相同';
       errEl.style.display = 'block'; return;
     }
     if (!countRaw || !/^\d+$/.test(countRaw) || parseInt(countRaw) < 1) {
@@ -1657,21 +1785,23 @@
       errEl.style.display = 'block'; return;
     }
     errEl.style.display = 'none';
+    batchStoreFrom = storeFrom;
     batchStoreName = store;
     batchTotalCount = parseInt(countRaw);
     currentBatchNo = 1;
     document.getElementById('batchSetupModal').classList.remove('open');
     updateBatchUI();
-    toast('✅ 已设置：' + store + '，共 ' + batchTotalCount + ' 单', 'success');
+    toast('✅ 已设置：' + storeFrom + ' → ' + store + '，共 ' + batchTotalCount + ' 单', 'success');
   });
   document.getElementById('btnCloseSetup').addEventListener('click', () => {
     document.getElementById('batchSetupModal').classList.remove('open');
   });
   document.getElementById('btnEditBatchSetup').addEventListener('click', () => {
     document.getElementById('batchSetupModal').classList.add('open');
+    document.getElementById('setupStoreFrom').value = batchStoreFrom;
     document.getElementById('setupStoreDest').value = batchStoreName;
     document.getElementById('setupBatchCount').value = batchTotalCount;
-    document.getElementById('setupStoreDest').focus();
+    document.getElementById('setupStoreFrom').focus();
   });
   document.getElementById('btnResetBatch').addEventListener('click', () => {
     batchStoreName = '';
@@ -1679,11 +1809,12 @@
     currentBatchNo = 1;
     updateBatchUI();
     toast('🔄 已重置调拨单设置', 'success');
-    // 自动弹出设置弹窗
+    // 自动弹出设置弹窗，调出门店默认带出
     document.getElementById('batchSetupModal').classList.add('open');
+    document.getElementById('setupStoreFrom').value = batchStoreFrom;
     document.getElementById('setupStoreDest').value = '';
     document.getElementById('setupBatchCount').value = '1';
-    document.getElementById('setupStoreDest').focus();
+    document.getElementById('setupStoreFrom').focus();
   });
   document.getElementById('btnPrevBatch').addEventListener('click', () => {
     if (currentBatchNo > 1) {
@@ -1817,7 +1948,13 @@
 
   document.getElementById('exportInfoModal').addEventListener('click', e => { if (e.target === e.currentTarget) e.target.classList.remove('open'); });
   document.getElementById('batchSetupModal').addEventListener('click', e => { if (e.target === e.currentTarget) e.target.classList.remove('open'); });
+  document.getElementById('setupStoreFrom').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('setupStoreDest').focus();
+  });
   document.getElementById('setupStoreDest').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('setupBatchCount').focus();
+  });
+  document.getElementById('setupBatchCount').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') document.getElementById('btnSetupConfirm').click();
   });
 
@@ -1931,8 +2068,11 @@
       doExport(filtered, filename, isDownload);
       return;
     }
-    // 弹出填写窗口，预填调入门店
+    // 弹出填写窗口，预填调出/调入门店
     const modal = document.getElementById('exportInfoModal');
+    if (batchStoreFrom) {
+      document.getElementById('exportInfoFromStore').value = batchStoreFrom;
+    }
     if (batchStoreName) {
       document.getElementById('exportInfoToStore').value = batchStoreName;
     }
@@ -1952,15 +2092,6 @@
     }
   }
 
-  // 导出选中
-  document.getElementById('btnExportSelected').addEventListener('click', () => {
-    const checkedOrders = new Set();
-    document.querySelectorAll('.order-check:checked').forEach(cb => checkedOrders.add(cb.dataset.order));
-    if (checkedOrders.size === 0) { toast('请先选择要导出的单据', 'error'); return; }
-    const filtered = transfers.filter(r => checkedOrders.has((r.storeDest || '未填门店') + '|' + (r.batchNo || 1)));
-    if (filtered.length === 0) { toast('所选单据无记录', 'error'); return; }
-    ensureExportInfo(filtered, '调拨记录_选中_'+today(), false);
-  });
 
   // 下载选中
   document.getElementById('btnDownloadSelected').addEventListener('click', () => {
@@ -1971,6 +2102,9 @@
     if (filtered.length === 0) { toast('所选单据无记录', 'error'); return; }
     ensureExportInfo(filtered, '调拨记录_选中_'+today(), true);
   });
+
+  // 导出到KPOS
+  document.getElementById('btnExportKPOS').addEventListener('click', exportKPOS);
 
   // 导出信息确认弹窗提交
   document.getElementById('btnExportInfoConfirm').addEventListener('click', () => {
@@ -2116,7 +2250,16 @@
     } else {
       document.getElementById('scanProductName').textContent = '未查到商品信息';
       document.getElementById('scanCodeRow').classList.add('hidden');
-      toast('⚠️ 该条码未匹配到商品，请先在商品库添加', '');
+    }
+    // 手动添加商品区域：未查到时显示，查到时隐藏
+    const addSection2 = document.getElementById('scanAddProduct');
+    if (matched) {
+      addSection2.classList.add('hidden');
+      setTimeout(() => document.getElementById('inputQuantity').focus(), 300);
+    } else {
+      addSection2.classList.remove('hidden');
+      document.getElementById('inputManualName').value = '';
+      setTimeout(() => document.getElementById('inputManualName').focus(), 300);
     }
     document.getElementById('scanBoxNo').textContent = '第 ' + currentBoxNo + ' 箱';
     const batchInfoEl = document.getElementById('scanBatchInfo');
@@ -2127,7 +2270,6 @@
     } else {
       document.getElementById('scanBatchRow').style.display = 'none';
     }
-    document.getElementById('inputQuantity').focus();
   });
 
   document.getElementById('manualBarcode').addEventListener('keydown', (e) => {
