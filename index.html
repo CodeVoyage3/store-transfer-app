@@ -1171,34 +1171,55 @@
     var matched = products.find(function(p) { return p.barcode === code; }) || (rm ? { barcode: code, name: rm.n, code: rm.c } : null);
     currentScan = { barcode: code, product: matched || null };
 
-    // 3. 填入手动输入框（主页面保留）
+    // 3. 填入手动输入框
     var input = document.getElementById('manualBarcode');
     if (input) input.value = code;
 
-    // 4. 显示相机内结果覆盖层
-    document.getElementById('scanResultOverlay').classList.remove('hidden');
-    document.getElementById('sroBarcode').textContent = code;
-    document.getElementById('sroName').textContent = matched ? matched.name : '⚠️ 未查到';
-    document.getElementById('sroTitle').textContent = matched ? '✅ 已识别' : '⚠️ 未匹配';
-    document.getElementById('sroTitle').style.color = matched ? '#059669' : '#DC2626';
-    document.getElementById('sroCode').textContent = matched && matched.code ? matched.code : '';
-    document.getElementById('sroCodeRow').className = matched && matched.code ? 'mb-2' : 'mb-2 hidden';
-    document.getElementById('sroBox').textContent = '第 ' + currentBoxNo + ' 箱';
-
-    var batchEl = document.getElementById('sroBatch');
-    if (batchStoreName) {
-      document.getElementById('sroBatchRow').style.display = 'block';
-      batchEl.textContent = batchStoreName + ' · 第 ' + currentBatchNo + ' 单';
+    if (matched) {
+      // === 匹配到商品：在相机内显示结果 + 数量输入 ===
+      document.getElementById('scanResultOverlay').classList.remove('hidden');
+      document.getElementById('sroBarcode').textContent = code;
+      document.getElementById('sroName').textContent = matched.name;
+      document.getElementById('sroTitle').textContent = '✅ 已识别';
+      document.getElementById('sroTitle').style.color = '#059669';
+      document.getElementById('sroCode').textContent = matched.code || '';
+      document.getElementById('sroCodeRow').className = matched.code ? 'mb-2' : 'mb-2 hidden';
+      document.getElementById('sroBox').textContent = '第 ' + currentBoxNo + ' 箱';
+      var batchEl = document.getElementById('sroBatch');
+      if (batchStoreName) {
+        document.getElementById('sroBatchRow').style.display = 'block';
+        batchEl.textContent = batchStoreName + ' · 第 ' + currentBatchNo + ' 单';
+      } else {
+        document.getElementById('sroBatchRow').style.display = 'none';
+      }
+      document.getElementById('sroAddProduct').className = 'hidden';
+      document.getElementById('sroQtyRow').className = '';
+      document.getElementById('sroQty').value = '';
+      setTimeout(function() { document.getElementById('sroQty').focus(); }, 200);
     } else {
-      document.getElementById('sroBatchRow').style.display = 'none';
+      // === 未匹配到商品：关闭相机，回到主界面处理 ===
+      try { if (window.Quagga) Quagga.stop(); } catch(e) {}
+      var overlay = document.getElementById('scannerOverlay');
+      if (overlay) overlay.classList.remove('open');
+      quaggaRunning = false;
+      document.getElementById('scanResultOverlay').classList.add('hidden');
+      // 更新主界面扫码结果面板
+      var r = document.getElementById('scanResult');
+      r.classList.remove('hidden');
+      document.getElementById('scanBarcode').textContent = code;
+      document.getElementById('scanProductName').textContent = '⚠️ 未查到商品信息（请先导入商品库或手动添加）';
+      document.getElementById('scanProductCode').textContent = '';
+      document.getElementById('scanCodeRow').className = 'mb-2 hidden';
+      document.getElementById('scanAddProduct').className = '';
+      document.getElementById('scanBoxNo').textContent = '第 ' + currentBoxNo + ' 箱';
+      var batchInfoEl = document.getElementById('scanBatchInfo');
+      if (batchStoreName) {
+        document.getElementById('scanBatchRow').style.display = 'block';
+        batchInfoEl.textContent = batchStoreName + ' · 第 ' + currentBatchNo + ' 单';
+      } else {
+        document.getElementById('scanBatchRow').style.display = 'none';
+      }
     }
-
-    // 未查到时显示手动添加
-    document.getElementById('sroAddProduct').className = matched ? 'hidden' : '';
-    // 直接显示数量输入框（省去确认录入步骤）
-    document.getElementById('sroQtyRow').className = '';
-    document.getElementById('sroQty').value = '';
-    setTimeout(function() { document.getElementById('sroQty').focus(); }, 200);
   }
 
   function stopScanner() {
