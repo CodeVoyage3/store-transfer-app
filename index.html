@@ -177,7 +177,6 @@
       width: 260px; height: 325px;
       border: 2.5px solid rgba(255,255,255,0.7);
       border-radius: 12px; pointer-events: none;
-      box-shadow: 0 0 0 9999px rgba(0,0,0,0.5);
     }
     .scanner-scanline {
       position: absolute; left: 50%; transform: translateX(-50%);
@@ -1171,19 +1170,9 @@
       let lastDetectHint = '';
       scanTimer = setInterval(async () => {
         if (!isScanning || !video.videoWidth) return;
-        const fEl = document.querySelector('.scanner-frame');
-        if (fEl) {
-          const vR = video.getBoundingClientRect(), fR = fEl.getBoundingClientRect();
-          const sx = (fR.left - vR.left) * (video.videoWidth / vR.width);
-          const sy = (fR.top - vR.top) * (video.videoHeight / vR.height);
-          const sw = fR.width * (video.videoWidth / vR.width);
-          const sh = fR.height * (video.videoHeight / vR.height);
-          canvas.width = 640; canvas.height = 800;
-          ctx.drawImage(video, sx, sy, sw, sh, 0, 0, 640, 800);
-        } else {
-          canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-          ctx.drawImage(video, 0, 0);
-        }
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0);
         try {
           const results = await barcodeDetector.detect(canvas);
           const hint = document.getElementById('scanHintFull');
@@ -1212,19 +1201,9 @@
       let lastQuaggaHint = '';
       scanTimer = setInterval(() => {
         if (!isScanning || !video.videoWidth || decoding) return;
-        const fEl2 = document.querySelector('.scanner-frame');
-        if (fEl2) {
-          const vR2 = video.getBoundingClientRect(), fR2 = fEl2.getBoundingClientRect();
-          const sx2 = (fR2.left - vR2.left) * (video.videoWidth / vR2.width);
-          const sy2 = (fR2.top - vR2.top) * (video.videoHeight / vR2.height);
-          const sw2 = fR2.width * (video.videoWidth / vR2.width);
-          const sh2 = fR2.height * (video.videoHeight / vR2.height);
-          canvas.width = 320; canvas.height = 400;
-          ctx.drawImage(video, sx2, sy2, sw2, sh2, 0, 0, 320, 400);
-        } else {
-          canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-          ctx.drawImage(video, 0, 0);
-        }
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0);
         decoding = true;
         canvas.toBlob((blob) => {
           const url = URL.createObjectURL(blob);
