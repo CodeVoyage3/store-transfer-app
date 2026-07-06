@@ -1121,9 +1121,27 @@
     // 震动
     try { navigator.vibrate(80); } catch(e) {}
 
-    // 自动点击查找，沿用手动输入逻辑
-    var btn = document.getElementById('btnManualMatch');
-    if (btn) btn.click();
+    // 直接查找商品信息（不依赖调拨单设置）
+    var rm = remoteProductMap.get(code);
+    var matched = products.find(function(p) { return p.barcode === code; }) || (rm ? { barcode: code, name: rm.n, code: rm.c } : null);
+    currentScan = { barcode: code, product: matched || null };
+
+    // 更新扫码结果面板
+    var r = document.getElementById('scanResult');
+    r.classList.remove('hidden');
+    document.getElementById('scanBarcode').textContent = code;
+    document.getElementById('scanProductName').textContent = matched ? matched.name : '⚠️ 未查到商品信息（请先导入商品库或手动添加）';
+    document.getElementById('scanProductCode').textContent = matched && matched.code ? matched.code : '';
+    document.getElementById('scanCodeRow').className = matched && matched.code ? 'mb-2' : 'mb-2 hidden';
+    document.getElementById('scanAddProduct').className = matched ? 'hidden' : '';
+    document.getElementById('scanBoxNo').textContent = '第 ' + currentBoxNo + ' 箱';
+    var batchInfoEl = document.getElementById('scanBatchInfo');
+    if (batchStoreName) {
+      document.getElementById('scanBatchRow').style.display = 'block';
+      batchInfoEl.textContent = batchStoreName + ' · 第 ' + currentBatchNo + ' 单';
+    } else {
+      document.getElementById('scanBatchRow').style.display = 'none';
+    }
   }
 
   function stopScanner() {
