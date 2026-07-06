@@ -640,11 +640,7 @@
   let batchTotalCount = 1;
   let currentBatchNo = 1;
   let continueBatchNo = 0;
-  // 多帧条码投票
-  const BARCODE_VOTES = {};
-  let lastConfirmedCode = '';
-  const BARCODE_VOTE_NEEDED = 2;
-  const BARCODE_VOTE_WINDOW = 3000;
+  let lastBarcode = '';
 
   // ===== 远程商品库同步 =====
   const SECRET_KEY = 'KkV_Tr@nsf3r#2026!';
@@ -1126,27 +1122,13 @@
     }
   }
 
-  // 条码校验与多帧投票
-  // 返回值：0=无效/已确认过，1=检测到投票中，2=投票通过已确认
-  function validateAndVote(code) {
-    if (!code || code.length < 3 || code.length > 50) return 0;
-    if (/[^0-9A-Za-z\- ]/.test(code)) return 0;
-    if (code === lastConfirmedCode) return 0;
-    const now = Date.now();
-    for (const k in BARCODE_VOTES) {
-      if (now - BARCODE_VOTES[k] > BARCODE_VOTE_WINDOW) delete BARCODE_VOTES[k];
-    }
-    if (BARCODE_VOTES[code]) {
-      BARCODE_VOTES[code]++;
-      if (BARCODE_VOTES[code] >= BARCODE_VOTE_NEEDED) {
-        delete BARCODE_VOTES[code];
-        lastConfirmedCode = code;
-        return 2;
-      }
-    } else {
-      BARCODE_VOTES[code] = 1;
-    }
-    return 1;
+  // 条码校验：过滤乱码，防止重复识别
+  function validateBarcode(code) {
+    if (!code || code.length < 3 || code.length > 50) return false;
+    if (/[^0-9A-Za-z\- ]/.test(code)) return false;
+    if (code === lastBarcode) return false;
+    lastBarcode = code;
+    return true;
   }
 
   function stopCamera() {
@@ -1167,7 +1149,6 @@
       const video = document.getElementById('video');
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
-      let lastDetectHint = '';
       scanTimer = setInterval(async () => {
         if (!isScanning || !video.videoWidth) return;
         canvas.width = video.videoWidth;
@@ -1178,15 +1159,13 @@
           const hint = document.getElementById('scanHintFull');
           if (results.length > 0 && results[0].rawValue) {
             const code = results[0].rawValue;
-            const vr = validateAndVote(code);
-            if (vr === 2) {
+            if (validateBarcode(code)) {
               hint.textContent = '✅ 识别成功！';
-              onBarcodeDetected(code);
-            } else if (vr === 1 && code !== lastDetectHint) {
-              lastDetectHint = code;
-              hint.textContent = '📡 检测到条码 ' + code + '，确认中...';
+              setTimeout(() => onBarcodeDetected(code), 200);
+            } else {
+              hint.textContent = '📡 检测到条码，校验中...';
             }
-          } else if (hint.textContent.includes('确认') || hint.textContent.includes('识别成功')) {
+          } else if (hint.textContent.includes('✅') || hint.textContent.includes('校验')) {
             hint.textContent = '📷 扫描中...';
           }
         } catch(e) {}
@@ -1198,7 +1177,6 @@
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       let decoding = false;
-      let lastQuaggaHint = '';
       scanTimer = setInterval(() => {
         if (!isScanning || !video.videoWidth || decoding) return;
         canvas.width = video.videoWidth;
@@ -1215,16 +1193,14 @@
             const hint = document.getElementById('scanHintFull');
             if (r && r.codeResult && r.codeResult.code) {
               const code = r.codeResult.code;
-              const vr = validateAndVote(code);
-              if (vr === 2) {
+              if (validateBarcode(code)) {
                 clearInterval(scanTimer); scanTimer = null;
                 hint.textContent = '✅ 识别成功！';
-                onBarcodeDetected(code);
-              } else if (vr === 1 && code !== lastQuaggaHint) {
-                lastQuaggaHint = code;
-                hint.textContent = '📡 检测到条码 ' + code + '，确认中...';
+                setTimeout(() => onBarcodeDetected(code), 200);
+              } else {
+                hint.textContent = '📡 检测到条码，校验中...';
               }
-            } else if (hint.textContent.includes('确认') || hint.textContent.includes('识别成功')) {
+            } else if (hint.textContent.includes('✅') || hint.textContent.includes('校验')) {
               hint.textContent = '📷 Quagga 扫描中...';
             }
           });
