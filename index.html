@@ -292,7 +292,6 @@
     <span style="font-size:17px;font-weight:700;">门店调拨</span>
     <span style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
     <span id="storageStatus" style="font-size:10px;padding:2px 8px;border-radius:10px;background:rgba(0,0,0,0.08);color:#6B7280;">检查中...</span>
-    <span id="remoteStatus" style="font-size:9px;padding:1px 6px;border-radius:8px;background:rgba(0,0,0,0.05);color:#9CA3AF;"></span>
     </span>
   </div>
 
@@ -775,8 +774,6 @@
       encrypted = localStorage.getItem(LS_REMOTE_CACHE);
     }
     if (!encrypted) {
-      var el = document.getElementById('remoteStatus');
-      if (el && !el.textContent) el.textContent = '⚠️ 网络不可达，请检查网络后刷新';
       return;
     }
     let data = null;
@@ -808,17 +805,6 @@
           if (item.b) remoteProductMap.set(item.b, { n: item.n || '', c: item.c || '' });
         });
         remoteVersion = data.v || '';
-        var el = document.getElementById('remoteStatus');
-        if (el) el.textContent = '📦 ' + remoteProductMap.size + ' 条 已同步';
-      }
-    } else {
-      var el2 = document.getElementById('remoteStatus');
-      if (el2 && !el2.textContent) {
-        if (typeof CryptoJS === 'undefined' || typeof pako === 'undefined') {
-          el2.textContent = '⚠️ 解密库缺失';
-        } else {
-          el2.textContent = '⚠️ 远程未加载';
-        }
       }
     }
   }
