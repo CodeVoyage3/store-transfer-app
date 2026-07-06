@@ -1883,65 +1883,8 @@
       document.getElementById('scanAddProduct').classList.add('hidden');
       toast('已添加商品', 'success');
     });
-    // Excel 导入商品
-    document.getElementById('btnImportExcel').addEventListener('click', () => {
-      document.getElementById('excelFileInput').click();
-    });
-    document.getElementById('excelFileInput').addEventListener('change', function(e) {
-      var file = e.target.files[0];
-      if (!file) return;
-      var st = document.getElementById('excelImportStatus');
-      st.textContent = '读取中...';
-      var reader = new FileReader();
-      reader.onload = function(ev) {
-        try {
-          var wb = XLSX.read(ev.target.result, { type: 'array' });
-          var ws = wb.Sheets[wb.SheetNames[0]];
-          var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-          var added = 0, skipped = 0, bcCol = 0, nmCol = 1, cdCol = -1;
-          if (rows.length > 0) {
-            var h = rows[0].map(function(v) { return String(v).trim().toLowerCase(); });
-            h.forEach(function(v, i) {
-              if (v.indexOf('条码') >= 0 || v.indexOf('barcode') >= 0) bcCol = i;
-              if (v.indexOf('名称') >= 0 || v.indexOf('品名') >= 0 || v.indexOf('name') >= 0) nmCol = i;
-              if (v.indexOf('商品编码') >= 0 || v.indexOf('商品代码') >= 0) cdCol = i;
-            });
-          }
-          for (var i = 1; i < rows.length; i++) {
-            var row = rows[i];
-            if (!row || !row[bcCol]) continue;
-            var bc = String(row[bcCol]).trim();
-            var nm = row[nmCol] ? String(row[nmCol]).trim() : '';
-            var cd = cdCol >= 0 && row[cdCol] ? String(row[cdCol]).trim() : '';
-            if (bc && nm) {
-              if (!products.some(function(p) { return p.barcode === bc; })) {
-                products.push({ barcode: bc, name: nm, code: cd, unit: '个', spec: '', createdAt: new Date().toISOString() });
-                added++;
-              } else { skipped++; }
-            }
-          }
-          saveProducts();
-          st.textContent = '✅ 导入 ' + added + ' 条' + (skipped > 0 ? '，跳过 ' + skipped + ' 条重复' : '');
-          if (currentScan && currentScan.barcode) {
-            var c2 = currentScan.barcode;
-            var m2 = remoteProductMap.get(c2) || null;
-            var p2 = products.find(function(p) { return p.barcode === c2; });
-            var matched = p2 || (m2 ? { barcode: c2, name: m2.n, code: m2.c } : null);
-            if (matched) {
-              document.getElementById('scanProductName').textContent = matched.name;
-              document.getElementById('scanProductCode').textContent = matched.code || '';
-              document.getElementById('scanCodeRow').className = matched.code ? 'mb-2' : 'mb-2 hidden';
-              document.getElementById('scanAddProduct').classList.add('hidden');
-              currentScan.product = matched;
-              toast('已匹配: ' + matched.name, 'success');
-            }
-          }
-        } catch(ex) { st.textContent = '❌ 失败: ' + ex.message; }
-      };
-      reader.readAsArrayBuffer(file);
-      e.target.value = '';
-    });
-    // 清空记录
+    // Excel 导入（已移除）
+        // 清空记录
     document.getElementById('btnClearRecords').addEventListener('click', () => {
       if (transfers.length === 0) { toast('暂无记录', ''); return; }
       showConfirm({ title: '清空全部记录？', msg: '共有 <b>' + transfers.length + '</b> 条记录<br>建议先导出备份', danger: true, okText: '确认清空', onOk: () => {
