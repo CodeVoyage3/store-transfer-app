@@ -310,20 +310,22 @@
     </div>
 
     <!-- 调拨单状态（精简，仅显示已设置的信息） -->
-    <div class="card" style="padding:10px 14px;display:none;" id="batchCard">
-      <div style="display:flex;align-items:center;justify-content:space-between;">
-        <div style="display:flex;align-items:center;gap:6px;">
-          <span style="font-size:13px;font-weight:600;color:#374151;">🏪 调拨单</span>
-          <span id="batchStoreFromTag" style="display:none;font-size:11px;color:#374151;background:#F3F4F6;padding:1px 10px;border-radius:10px;"></span>
-          <span id="batchStoreArrow" style="display:none;font-size:11px;color:#9CA3AF;">→</span>
-          <span id="batchStoreTag" style="display:none;font-size:11px;color:#4F46E5;background:#EEF2FF;padding:1px 10px;border-radius:10px;"></span>
-        </div>
-        <div style="display:none;gap:6px;" id="batchActionBtns">
-          <button id="btnEditBatchSetup" style="background:none;border:none;font-size:11px;color:#4F46E5;cursor:pointer;padding:2px 6px;">✏️ 修改</button>
-          <button id="btnResetBatch" style="background:none;border:none;font-size:11px;color:#EF4444;cursor:pointer;padding:2px 6px;">🔄 重置</button>
+    <div class="card" style="padding:12px 14px;display:none;" id="batchCard">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+        <span style="font-size:13px;font-weight:700;color:#374151;">🏪 调拨单</span>
+        <div style="display:none;gap:4px;" id="batchActionBtns">
+          <button id="btnEditBatchSetup" style="background:none;border:none;font-size:11px;color:#4F46E5;cursor:pointer;padding:3px 8px;border-radius:6px;background:#EEF2FF;font-weight:500;">✏️修改</button>
+          <button id="btnResetBatch" style="background:none;border:none;font-size:11px;color:#EF4444;cursor:pointer;padding:3px 8px;border-radius:6px;background:#FEF2F2;font-weight:500;">🔄重置</button>
         </div>
       </div>
-      <div id="batchControl" style="display:none;margin-top:6px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+        <span id="batchStoreFromLabel" style="display:none;font-size:10px;color:#6B7280;font-weight:500;flex-shrink:0;">调出</span>
+        <span id="batchStoreFromTag" style="display:none;font-size:12px;color:#374151;background:#F3F4F6;padding:3px 10px;border-radius:8px;font-weight:500;word-break:break-all;"></span>
+        <span id="batchStoreArrow" style="display:none;font-size:12px;color:#9CA3AF;font-weight:600;flex-shrink:0;">→</span>
+        <span id="batchStoreToLabel" style="display:none;font-size:10px;color:#4F46E5;font-weight:500;flex-shrink:0;">调入</span>
+        <span id="batchStoreTag" style="display:none;font-size:12px;color:#4F46E5;background:#EEF2FF;padding:3px 10px;border-radius:8px;font-weight:600;word-break:break-all;"></span>
+      </div>
+      <div id="batchControl" style="display:none;">
         <div style="display:flex;align-items:center;justify-content:space-between;">
           <div style="display:flex;align-items:center;gap:4px;">
             <span style="font-size:13px;font-weight:600;color:#4F46E5;">
@@ -862,6 +864,8 @@
     const card = document.getElementById('batchCard');
     const storeTag = document.getElementById('batchStoreTag');
     const storeFromTag = document.getElementById('batchStoreFromTag');
+    const storeFromLabel = document.getElementById('batchStoreFromLabel');
+    const storeToLabel = document.getElementById('batchStoreToLabel');
     const storeArrow = document.getElementById('batchStoreArrow');
     const batchControl = document.getElementById('batchControl');
     const noDisplay = document.getElementById('batchNoDisplay');
@@ -872,9 +876,11 @@
     const actionBtns = document.getElementById('batchActionBtns');
     if (batchStoreName) {
       card.style.display = 'block';
+      storeFromLabel.style.display = 'inline';
       storeFromTag.style.display = 'inline';
       storeFromTag.textContent = batchStoreFrom || '（未填）';
       storeArrow.style.display = 'inline';
+      storeToLabel.style.display = 'inline';
       storeTag.style.display = 'inline';
       storeTag.textContent = batchStoreName;
       actionBtns.style.display = 'inline-flex';
@@ -892,8 +898,10 @@
       }
     } else {
       card.style.display = 'none';
+      storeFromLabel.style.display = 'none';
       storeFromTag.style.display = 'none';
       storeArrow.style.display = 'none';
+      storeToLabel.style.display = 'none';
       storeTag.style.display = 'none';
       batchControl.style.display = 'none';
       actionBtns.style.display = 'none';
@@ -2232,6 +2240,12 @@
   document.getElementById('btnManualMatch').addEventListener('click', () => {
     const code = document.getElementById('manualBarcode').value.trim();
     if (!code) { toast('请输入条码', 'error'); return; }
+    if (!batchStoreName) {
+      document.getElementById('batchSetupModal').classList.add('open');
+      document.getElementById('setupStoreFrom').value = batchStoreFrom;
+      document.getElementById('setupStoreFrom').focus();
+      return;
+    }
     var remoteMatch = remoteProductMap.get(code);
     const matched = products.find(p => p.barcode === code) || (remoteMatch ? { barcode: code, name: remoteMatch.n, code: remoteMatch.c } : null);
     currentScan = { barcode: code, product: matched || null };
