@@ -644,6 +644,7 @@
   const BARCODE_VOTES = {};
   let detectingBusy = false;
   const isAndroid = /Android/i.test(navigator.userAgent);
+  let hasAutoFocus = false;
 
   // ===== 远程商品库同步 =====
   const SECRET_KEY = 'KkV_Tr@nsf3r#2026!';
@@ -1100,17 +1101,18 @@
       }
       video.srcObject = mediaStream;
       await video.play();
-      // 启动后尝试触发对焦（部分Android设备需要）
+      // 检测是否支持自动对焦，决定提示文案
       try {
         const track = mediaStream.getVideoTracks()[0];
         if (track && track.getCapabilities) {
           const caps = track.getCapabilities();
           if (caps.focusMode && caps.focusMode.includes('continuous-video')) {
             await track.applyConstraints({ advanced: [{ focusMode: 'continuous-video' }] });
+            hasAutoFocus = true;
           }
         }
       } catch(ef) { /* 对焦设置非关键，忽略失败 */ }
-      // 点击视频画面触发重新对焦（Android对焦辅助）
+      // 点击视频画面触发重新对焦（仅在无自动对焦时提醒）
       video.onclick = async function() {
         try {
           const t = mediaStream.getVideoTracks()[0];
@@ -1118,10 +1120,12 @@
             await t.applyConstraints({ advanced: [{ focusMode: 'continuous-video' }] });
           }
         } catch(e) {}
-        document.getElementById('scanHintFull').textContent = '📷 对焦中...';
-        setTimeout(() => {
-          document.getElementById('scanHintFull').textContent = '📷 将条码对准框内，模糊请点击画面';
-        }, 150);
+        if (!hasAutoFocus) {
+          document.getElementById('scanHintFull').textContent = '📷 对焦中...';
+          setTimeout(() => {
+            document.getElementById('scanHintFull').textContent = '📷 将条码对准框内，模糊请点击画面';
+          }, 150);
+        }
       };
       return true;
     } catch(e) {
