@@ -269,7 +269,7 @@
     .confirm-btn-cancel { background: #F3F4F6; color: #6B7280; }
     .confirm-btn-danger { background: #EF4444; color: white; }
   </style>
-  <script src="quagga.min.js"></script>
+  <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
   <script src="xlsx.core.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
@@ -479,6 +479,7 @@
     <span class="title">扫描条码</span>
     <button id="btnToggleCam2">🔄 切换</button>
   </div>
+  <div id="scanToast" class="toast" style="position:absolute;top:50px;left:50%;transform:translateX(-50%);z-index:999;padding:8px 18px;border-radius:10px;background:rgba(5,150,105,0.95);color:white;font-size:14px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,0.3);opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap;"></div>
   <div class="scanner-view" id="scannerView">
     <video id="video" autoplay playsinline muted></video>
     <div class="scanner-frame"></div>
@@ -658,7 +659,7 @@
   let detectingBusy = false;
   const isAndroid = /Android/i.test(navigator.userAgent);
   let hasAutoFocus = false;
-  let zbarDecoder = null;
+  let zxingReader = null;
 
   // ===== 全局错误捕获 =====
   window.onerror = function(msg, url, line) {
@@ -1032,10 +1033,11 @@
   }
 
   // ===== 扫码引擎 =====
+  // 引擎优先级：BarcodeDetector（原生）> @zxing/library（CDN兜底）
   async function initBarcodeDetector() {
-    // BarcodeDetector支持任意角度条码+QR码，所有设备优先使用
+    // BarcodeDetector支持任意角度条码，优先使用
     if ('BarcodeDetector' in window) {
-      const formats = ['ean_13','ean_8'];   // 只开启商品条码常用码制
+      const formats = ['ean_13','ean_8','code_128']; // 只开启商品条码常用码制
       try {
         const supported = await BarcodeDetector.getSupportedFormats();
         const available = formats.filter(f => supported.includes(f));
@@ -1048,13 +1050,20 @@
         try { barcodeDetector = new BarcodeDetector({ formats: formats }); return true; } catch(e3) {}
       }
     }
-    // ZBar WASM降级（支持旋转+QR码，纯WASM解码无DOM冲突）
-    try {
-      const mod = await import('https://cdn.jsdelivr.net/npm/zbar-wasm@2.1.0/dist/zbar-wasm.js');
-      zbarDecoder = new mod.ZBarDecoder();
-      return true;
-    } catch(e) {
-      if (typeof Quagga !== 'undefined') return true;
+    // 方案二：@zxing/library 兜底（已通过 <script> 标签全局加载）
+    if (typeof ZXing !== 'undefined' && ZXing.BrowserMultiFormatReader) {
+      try {
+        zxingReader = new ZXing.BrowserMultiFormatReader();
+        // 限制码制：只保留商品条码相关
+        if (ZXing.DecodeHintType && zxingReader.hints instanceof Map) {
+          zxingReader.hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+            ZXing.BarcodeFormat.EAN_13,
+            ZXing.BarcodeFormat.EAN_8,
+            ZXing.BarcodeFormat.CODE_128
+          ]);
+        }
+        return true;
+      } catch(e) { console.warn('ZXing init failed:', e); }
     }
     return false;
   }
@@ -1131,10 +1140,17 @@
             video: { facingMode: useBackCamera ? 'environment' : 'user', width: { ideal: camW }, height: { ideal: camH } }
           });
         } catch(e2) {
-          // 最终降级：最低分辨率
-          mediaStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: useBackCamera ? 'environment' : 'user', width: { ideal: isAndroid ? 480 : 640 }, height: { ideal: isAndroid ? 360 : 480 } }
-          });
+          try {
+            // 尝试更高分辨率（部分设备需要高分辨率才能对焦清晰）
+            mediaStream = await navigator.mediaDevices.getUserMedia({
+              video: { facingMode: useBackCamera ? 'environment' : 'user', width: { ideal: 1920 }, height: { ideal: 1080 } }
+            });
+          } catch(e3) {
+            // 最终降级：最低分辨率
+            mediaStream = await navigator.mediaDevices.getUserMedia({
+              video: { facingMode: useBackCamera ? 'environment' : 'user', width: { ideal: isAndroid ? 480 : 640 }, height: { ideal: isAndroid ? 360 : 480 } }
+            });
+          }
         }
       }
       video.srcObject = mediaStream;
@@ -1200,19 +1216,23 @@
     return { sx, sy, sw, sh, dw, dh };
   }
 
-  // 条码校验+时间窗口投票：0=无效, 1=检测到（等待确认）, 2=确认通过
+  // 条码校验+双重确认：0=无效, 1=首次检测到（等待再次确认）, 2=确认通过
   function validateBarcode(code) {
     if (!code || code.length < 3 || code.length > 50) return 0;
     if (/[^0-9A-Za-z\- ]/.test(code)) return 0;
-    if (code === lastBarcode) return 0;  // 已确认过
+    if (code === lastBarcode) return 0;  // 已确认过，防重复
     const now = Date.now();
+    // 清理超时投票（超过800ms的投票失效）
     for (const k in BARCODE_VOTES) {
-      if (now - BARCODE_VOTES[k] > 1000) delete BARCODE_VOTES[k];
+      if (now - BARCODE_VOTES[k] > 800) delete BARCODE_VOTES[k];
     }
     if (BARCODE_VOTES[code]) {
+      // 同一码在 800ms 内再次检测到 → 确认通过
       delete BARCODE_VOTES[code];
       lastBarcode = code;
-      return 2;  // 确认通过
+      // 1秒内防重复入数
+      setTimeout(() => { if (lastBarcode === code) lastBarcode = ''; }, 1000);
+      return 2;
     } else {
       BARCODE_VOTES[code] = now;
       return 1;  // 首次检测到，等待再次确认
@@ -1233,137 +1253,96 @@
     if (isScanning) return;
     isScanning = true;
 
+    // 扫码通用裁剪函数
+    const video = document.getElementById('video');
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    let noDetectStart = Date.now();
+    let decoding = false;
+
+    function cropAndDecode(imageSrc) {
+      const crop = getScanBoxCrop();
+      if (crop) {
+        canvas.width = crop.dw;
+        canvas.height = crop.dh;
+        ctx.drawImage(imageSrc, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, crop.dw, crop.dh);
+      } else {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(imageSrc, 0, 0);
+      }
+    }
+
+    function handleDetectedCode(code, hint) {
+      const vr = validateBarcode(code);
+      if (vr === 2) {
+        const r = autoAddToBatch(code);
+        hint.textContent = '✅ 已录入: ' + r.name + ' ×' + r.qty;
+        noDetectStart = Date.now();
+        setTimeout(() => {
+          if (isScanning) hint.textContent = '📷 继续扫描...';
+        }, 1000);
+      } else if (vr === 1) {
+        hint.textContent = '📡 检测到条码，确认中...';
+      }
+      return vr > 0;
+    }
+
     if (barcodeDetector && mediaStream) {
-      const video = document.getElementById('video');
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
+      // 方案一：浏览器原生 BarcodeDetector
       scanTimer = setInterval(async () => {
         if (!isScanning || !video.videoWidth) return;
-        if (detectingBusy) return;
-        detectingBusy = true;
+        if (decoding) return;
+        decoding = true;
         try {
-          const crop = getScanBoxCrop();
-          if (crop) {
-            canvas.width = crop.dw;
-            canvas.height = crop.dh;
-            ctx.drawImage(video, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, crop.dw, crop.dh);
-          } else {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0);
-          }
-          const results = await barcodeDetector.detect(canvas);
+          cropAndDecode(video);
           const hint = document.getElementById('scanHintFull');
+          const results = await barcodeDetector.detect(canvas);
           if (results.length > 0 && results[0].rawValue) {
-            const code = results[0].rawValue;
-            const vr = validateBarcode(code);
-            if (vr === 2) {
-              const r = autoAddToBatch(code);
-              hint.textContent = '✅ ' + r.name + ' ×' + r.qty;
-              setTimeout(() => { if (isScanning) hint.textContent = '📷 继续扫描...'; }, 600);
-            } else if (vr === 1) {
-              hint.textContent = '📡 检测到条码，确认中...';
+            handleDetectedCode(results[0].rawValue, hint);
+          } else {
+            // 5秒无识别提示
+            if (Date.now() - noDetectStart > 5000 && !hint.textContent.includes('请将')) {
+              hint.textContent = '📷 请将商品条码横向放入黄色框内，保持平稳，避免反光。';
+              noDetectStart = Date.now();
             }
-          } else if (hint.textContent.includes('✅') || hint.textContent.includes('确认') || hint.textContent.includes('继续')) {
-            hint.textContent = '📷 扫描中...';
           }
         } catch(e) {}
-        detectingBusy = false;
+        decoding = false;
       }, 200);
-    } else if (zbarDecoder) {
-      // ZBar WASM引擎（支持旋转+QR码，无DOM冲突）
+    } else if (zxingReader) {
+      // 方案二：@zxing/library 兜底引擎
       document.getElementById('scanHintFull').textContent = '📷 解码中...';
-      const video = document.getElementById('video');
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      let decoding = false;
-      let scanStartTime = Date.now();
       scanTimer = setInterval(async () => {
-        if (!isScanning || !video.videoWidth || decoding) return;
+        if (!isScanning || !video.videoWidth) return;
+        if (decoding) return;
+        decoding = true;
         try {
-          decoding = true;
-          // 裁剪到扫码框区域，减少解码数据量
-          const crop = getScanBoxCrop();
-          if (crop) {
-            canvas.width = crop.dw;
-            canvas.height = crop.dh;
-            ctx.drawImage(video, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, crop.dw, crop.dh);
-          } else {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0);
-          }
-          const results = await zbarDecoder.decode(canvas);
-          decoding = false;
+          cropAndDecode(video);
           const hint = document.getElementById('scanHintFull');
-          if (results && results.length > 0 && results[0].decode) {
-            const code = results[0].decode;
-            const vr = validateBarcode(code);
-            if (vr === 2) {
-              const r = autoAddToBatch(code);
-              hint.textContent = '✅ ' + r.name + ' ×' + r.qty;
-              setTimeout(() => { if (isScanning) hint.textContent = '📷 继续扫描...'; }, 600);
-            } else if (vr === 1) {
-              hint.textContent = '📡 检测到条码，确认中...';
-            }
+          const result = await zxingReader.decodeFromCanvas(canvas);
+          if (result && result.text) {
+            handleDetectedCode(result.text, hint);
           } else {
-            if (Date.now() - scanStartTime > 8000) {
-              hint.textContent = '📷 请调整角度或靠近条码...';
-              scanStartTime = Date.now();
-            } else if (!hint.textContent.includes('检测') && !hint.textContent.includes('成功')) {
-              hint.textContent = '📷 解码中...';
+            if (Date.now() - noDetectStart > 5000 && !hint.textContent.includes('请将')) {
+              hint.textContent = '📷 请将商品条码横向放入黄色框内，保持平稳，避免反光。';
+              noDetectStart = Date.now();
             }
           }
-        } catch(e) { decoding = false; }
-      }, 300);
-    } else if (typeof Quagga !== 'undefined') {
-        document.getElementById('scanHintFull').textContent = '📷 降级引擎扫描中...';
-        const video = document.getElementById('video');
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        let decoding = false;
-        let scanStartTime = Date.now();
-        scanTimer = setInterval(() => {
-          if (!isScanning || !video.videoWidth || decoding) return;
-          try {
-            decoding = true;
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0);
-            canvas.toBlob((blob) => {
-              try {
-                const url = URL.createObjectURL(blob);
-                Quagga.decodeSingle({ src: url, locate: true, decoder: { readers: ['ean_reader','ean_8_reader','code_128_reader','code_39_reader','code_93_reader','i2of5_reader','upc_reader','upc_e_reader'] } }, (r) => {
-                  URL.revokeObjectURL(url); decoding = false;
-                  const hint = document.getElementById('scanHintFull');
-                  if (r && r.codeResult && r.codeResult.code) {
-                    const code = r.codeResult.code;
-                    const vr = validateBarcode(code);
-                    if (vr === 2) {
-                      clearInterval(scanTimer); scanTimer = null;
-                      hint.textContent = '✅ 识别成功！';
-                      setTimeout(() => onBarcodeDetected(code), 200);
-                    } else if (vr === 1) {
-                      hint.textContent = '📡 检测到条码，确认中...';
-                    }
-                  } else {
-                    if (Date.now() - scanStartTime > 8000) {
-                      hint.textContent = '📷 请调整角度或靠近条码...';
-                      scanStartTime = Date.now();
-                    } else if (!hint.textContent.includes('检测') && !hint.textContent.includes('成功')) {
-                      hint.textContent = '📷 降级引擎扫描中...';
-                    }
-                  }
-                });
-              } catch(ei) { decoding = false; }
-            }, 'image/jpeg', 0.8);
-          } catch(e) { decoding = false; }
-        }, 400);
-      } else {
-        // 完全无扫码能力
-        document.getElementById('scanHintFull').textContent = '⚠️ 当前浏览器不支持扫码，请使用Chrome';
-        scanTimer = setInterval(() => {}, 1000);
-      }
+        } catch(e) {
+          // ZXing 在无条码时会抛异常，这是正常行为
+          const hint = document.getElementById('scanHintFull');
+          if (Date.now() - noDetectStart > 5000 && !hint.textContent.includes('请将')) {
+            hint.textContent = '📷 请将商品条码横向放入黄色框内，保持平稳，避免反光。';
+            noDetectStart = Date.now();
+          }
+        }
+        decoding = false;
+      }, 200);
+    } else {
+      document.getElementById('scanHintFull').textContent = '⚠️ 当前浏览器不支持扫码，请使用Chrome';
+      scanTimer = setInterval(() => {}, 1000);
+    }
   }
 
   // 连续扫码：自动添加到当前调拨单，不关闭扫码界面
@@ -1394,6 +1373,13 @@
       transfers.push({ id: uid(), barcode: code, productName: pName, productCode: pCode, quantity: 1, boxNo: currentBoxNo, storeDest: batchStoreName, batchNo: currentBatchNo, fromStore: batchStoreFrom || '', timestamp: new Date().toISOString() });
     }
     saveTransfers();
+    // 顶部通知条
+    var notif = document.getElementById('scanToast');
+    if (notif) {
+      notif.textContent = '✅ 已录入: ' + pName + ' ×' + (exist ? exist.quantity : 1);
+      notif.classList.add('show');
+      setTimeout(function() { notif.classList.remove('show'); }, 2000);
+    }
     return { name: pName, qty: exist ? exist.quantity : 1, added: !!exist };
   }
 
