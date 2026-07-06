@@ -1758,15 +1758,7 @@
     // 切换摄像头
     document.getElementById('btnToggleCam2').addEventListener('click', () => { try { if (window.Quagga) Quagga.stop(); } catch(e) {} quaggaRunning = false; startScanner(); });
     // 扫码结果覆盖层按钮
-    	    // 扫码结果覆盖层 - 自动提交（输入数量后 600ms 自动提交）
-	    var sroSubmitTimer = null;
-	    document.getElementById('sroQty').addEventListener('input', function() {
-	      if (sroSubmitTimer) clearTimeout(sroSubmitTimer);
-	      var v = parseInt(this.value);
-	      if (v && v > 0) {
-	        sroSubmitTimer = setTimeout(function() { document.getElementById('btnSroSubmit').click(); }, 600);
-	      }
-	    });
+    	    // 扫码结果覆盖层 - 回车提交，或点击提交按钮
 	    document.getElementById('sroQty').addEventListener('keydown', function(e) { if (e.key === 'Enter') document.getElementById('btnSroSubmit').click(); });
 	    document.getElementById('btnSroSubmit').addEventListener('click', function() {
 	      var qty = parseInt(document.getElementById('sroQty').value);
