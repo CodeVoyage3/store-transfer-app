@@ -278,6 +278,7 @@
 <div class="phone-frame">
 
 <div id="toast" class="toast"></div>
+<div id="pageError" style="display:none;background:#FEF2F2;color:#DC2626;font-size:12px;padding:8px 12px;text-align:center;border-bottom:1px solid #FCA5A5;position:sticky;top:0;z-index:999;"></div>
 
 <!-- Header -->
 <div class="header">
@@ -658,6 +659,22 @@
   const isAndroid = /Android/i.test(navigator.userAgent);
   let hasAutoFocus = false;
   let zbarDecoder = null;
+
+  // ===== 全局错误捕获 =====
+  window.onerror = function(msg, url, line) {
+    document.getElementById('pageError').textContent = '⚠️ 页面异常，请截图反馈: ' + msg;
+    document.getElementById('pageError').style.display = 'block';
+    return true;
+  };
+  window.addEventListener('unhandledrejection', function(e) {
+    document.getElementById('pageError').textContent = '⚠️ 异步异常: ' + (e.reason ? e.reason.message || e.reason : '未知');
+    document.getElementById('pageError').style.display = 'block';
+  });
+  function updateStatus(text, ok) {
+    var el = document.getElementById('storageStatus');
+    if (el) { el.textContent = text; el.style.background = ok ? 'rgba(16,185,129,0.2)' : 'rgba(245,158,11,0.2)'; el.style.color = ok ? '#059669' : '#D97706'; }
+  }
+  updateStatus('加载中...', false);
 
   // ===== 远程商品库同步 =====
   const SECRET_KEY = 'KkV_Tr@nsf3r#2026!';
@@ -1877,777 +1894,324 @@
     toast('✅ 已导出 ' + filtered.length + ' 条商品到KPOS格式', 'success');
   }
 
-  // ===== Init =====
-  loadData();
-  checkExpiration();
-  loadBatchSetup();
-  updateBatchUI();
-  console.log('[诊断] 本地products数量:', products.length);
-  if (products.length > 0) console.log('[诊断] 示例条码:', products[0].barcode);
-  await fetchRemoteProducts();
-  console.log('[诊断] 远程商品remoteProductMap数量:', remoteProductMap.size);
-  renderProducts();
-  renderRecords();
-  renderLatestRecords();
-
-
-
-  // Tab switching
-  document.querySelectorAll('.tab-bar button').forEach(b => {
-    b.addEventListener('click', () => switchTab(b.dataset.section));
-  });
-
-  // 扫码图标点击 - 直接打开扫码
-  document.getElementById('btnOpenScanner').addEventListener('click', () => {
-    openScanner();
-  });
-
-  // 关闭全屏相机
-  document.getElementById('btnCloseScanner').addEventListener('click', closeScanner);
-
-  // 切换摄像头
-  document.getElementById('btnToggleCam2').addEventListener('click', () => {
-    useBackCamera = !useBackCamera;
-    // 需要重新启动摄像头
-    stopCamera();
-    document.getElementById('scannerLoading').classList.remove('hidden');
-    document.getElementById('scannerLoading').querySelector('.scanner-loading-text').textContent = '点击启动相机';
-    document.getElementById('scannerLoading').querySelector('.scanner-loading-sub').textContent = '需授予摄像头权限';
-    document.getElementById('scanHintFull').textContent = '📷 点击启动相机';
-  });
-
-  // 清空扫码结果
-  document.getElementById('btnClearScan').addEventListener('click', () => {
-    currentScan = null;
-    document.getElementById('scanResult').classList.add('hidden');
-    document.getElementById('inputQuantity').value = '';
-  });
-
-  // 手动添加商品（条码未查到时）
-  document.getElementById('btnAddManualProduct').addEventListener('click', () => {
-    const name = document.getElementById('inputManualName').value.trim();
-    if (!name) { toast('请输入商品名称', 'error'); return; }
-    const barcode = currentScan ? currentScan.barcode : '';
-    if (!barcode) { toast('请先扫码', 'error'); return; }
-    // 检查是否重复
-    if (products.some(p => p.barcode === barcode)) {
-      toast('该条码已在商品库中，可直接使用', 'info');
-      currentScan.product = products.find(p => p.barcode === barcode);
-      document.getElementById('scanProductName').textContent = currentScan.product.name;
-      document.getElementById('scanAddProduct').classList.add('hidden');
-      document.getElementById('inputQuantity').focus();
-      return;
-    }
-    products.push({ barcode, name, code: '', unit: '个', spec: '', createdAt: new Date().toISOString() });
-    saveProducts();
-    currentScan.product = { barcode, name, code: '', unit: '个' };
-    document.getElementById('scanProductName').textContent = name;
-    document.getElementById('scanAddProduct').classList.add('hidden');
-    toast('✅ 已添加：' + name, 'success');
-    setTimeout(() => document.getElementById('inputQuantity').focus(), 300);
-  });
-  // 手动添加回车确认
-  document.getElementById('inputManualName').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      document.getElementById('btnAddManualProduct').click();
-    }
-  });
-
-  // 输入数量后自动确认（同单号+同箱号+同条码自动叠加数量）
-  let quantityTimer = null;
-  function doConfirm() {
-    if (!currentScan) return;
-    const qty = parseInt(document.getElementById('inputQuantity').value);
-    if (!qty || qty < 1) return;
-    if (!currentScan.product) {
-      toast('未查到商品信息，请在下方输入名称后点击「➕ 添加」', 'error');
-      document.getElementById('inputQuantity').value = '';
-      currentScan = null;
-      document.getElementById('scanResult').classList.add('hidden');
-      return;
-    }
-    if (currentBoxNo > 1 && getBoxSummary(1).count === 0) {
-      showCenterAlert('第 1 箱暂无记录，请先在第 1 箱扫码录入');
-      document.getElementById('inputQuantity').value = '';
-      currentScan = null;
-      document.getElementById('scanResult').classList.add('hidden');
-      return;
-    }
-    // 调拨单SKU上限检查：每单最多50个SKU
-    if (batchStoreName) {
-      const curSku = getBatchSKUCount(batchStoreName, currentBatchNo);
-      if (curSku >= 50) {
-        if (currentBatchNo < batchTotalCount) {
-          showCenterAlert('第 ' + currentBatchNo + ' 单已满50条，请切换到下一单');
-        } else {
-          showCenterAlert('全部 ' + batchTotalCount + ' 单已录满，请导出');
-        }
-        document.getElementById('inputQuantity').value = '';
-        currentScan = null;
-        document.getElementById('scanResult').classList.add('hidden');
-        return;
-      }
-    }
-    const barcode = currentScan.barcode;
-    const productName = currentScan.product ? currentScan.product.name : '未查到商品信息';
-    const currentOrderNo = '';
-    // 查找同单号+同箱号+同条码的已有记录 → 叠加数量
-    const existing = transfers.find(t => t.orderNo === currentOrderNo && t.boxNo === currentBoxNo && t.barcode === barcode && t.storeDest === batchStoreName && t.batchNo === currentBatchNo);
-    let totalQty;
-    let newRecord = false;
-    if (existing) {
-      existing.quantity = (parseInt(existing.quantity) || 0) + qty;
-      existing.timestamp = new Date().toISOString();
-      totalQty = existing.quantity;
-    } else {
-      newRecord = true;
-      transfers.unshift({
-        id: uid(),
-        orderNo: currentOrderNo,
-        boxNo: currentBoxNo,
-        barcode: barcode,
-        productName: productName,
-        productCode: (currentScan.product && currentScan.product.code) || '',
-        quantity: qty,
-        unit: (currentScan.product && currentScan.product.unit) || '个',
-        fromStore: batchStoreFrom || '',
-        toStore: '',
-        inboundNo: '',
-        transferType: '',
-        note: '',
-        storeManager: '',
-        handler: '',
-        storeDest: batchStoreName,
-        batchNo: currentBatchNo,
-        timestamp: new Date().toISOString()
-      });
-      totalQty = qty;
-    }
-    saveTransfers();
-    updateBoxUI();
-    updateBatchUI();
-    // 满50条自动切换到下一单
-    if (batchStoreName) {
-      const newSku = getBatchSKUCount(batchStoreName, currentBatchNo);
-      if (newSku >= 50 && currentBatchNo < batchTotalCount) {
-        currentBatchNo++;
-        toast('✅ 第 ' + (currentBatchNo-1) + ' 单已满50条，已切换到第 ' + currentBatchNo + ' 单', 'success');
-        updateBatchUI();
-      }
-    }
-    addLatestRecord(barcode, qty, currentBoxNo);
-    // 显示居中成功弹窗（叠加时显示合计数量）
-    const displayTotal = existing ? '（累计 ' + totalQty + ' 件）' : '';
-    const batchInfo = batchStoreName ? ' · ' + batchStoreName + ' 第' + currentBatchNo + '单' : '';
-    document.getElementById('successMsg').innerHTML = productName + ' × +' + qty + displayTotal + '<br><span style="font-size:13px;color:#6B7280;">第 ' + currentBoxNo + ' 箱' + batchInfo + '</span>';
-    document.getElementById('successPopup').classList.add('open');
-    setTimeout(() => document.getElementById('successPopup').classList.remove('open'), 1500);
-    currentScan = null;
-    document.getElementById('scanResult').classList.add('hidden');
-    document.getElementById('inputQuantity').value = '';
-  }
-  document.getElementById('inputQuantity').addEventListener('change', doConfirm);
-  document.getElementById('inputQuantity').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); doConfirm(); }
-  });
-
-  // 搜索 / 筛选
-  document.getElementById('inputSearchRecord').addEventListener('input', renderRecords);
-  document.getElementById('selectStoreFilter').addEventListener('change', renderRecords);
-  document.getElementById('inputSearchProduct').addEventListener('input', () => renderProducts());
-
-  // ===== 锁定/编辑基本信息切换 =====
-  
-
-  
-
-  
-
-  // 基本信息输入验证已移除（扫码页精简）
-
-  // ===== 箱导航事件 =====
-  document.getElementById('btnNewBox').addEventListener('click', () => {
-    const box1Summary = getBoxSummary(1);
-    if (box1Summary.count === 0) {
-      showCenterAlert('第 1 箱暂无记录，请先在第 1 箱扫码录入');
-      return;
-    }
-    maxCreatedBoxNo++;
-    currentBoxNo = maxCreatedBoxNo;
-    updateBoxUI();
-    toast('已切换到第 ' + maxCreatedBoxNo + ' 箱', 'success');
-  });
-  document.getElementById('btnPrevBox').addEventListener('click', () => {
-    const boxNumbers = getBoxNumbers();
-    const idx = boxNumbers.indexOf(currentBoxNo);
-    if (idx > 0) {
-      currentBoxNo = boxNumbers[idx - 1];
-      updateBoxUI();
-    } else {
-      toast('已是第一箱', '');
-    }
-  });
-  document.getElementById('btnNextBox').addEventListener('click', () => {
-    const boxNumbers = getBoxNumbers();
-    const idx = boxNumbers.indexOf(currentBoxNo);
-    if (idx < boxNumbers.length - 1) {
-      currentBoxNo = boxNumbers[idx + 1];
-      updateBoxUI();
-    } else {
-      toast('已是最后一箱', '');
-    }
-  });
-
-  // ===== 调拨单导航事件 =====
-  document.getElementById('btnSetupConfirm').addEventListener('click', () => {
-    const storeFrom = document.getElementById('setupStoreFrom').value.trim();
-    const store = document.getElementById('setupStoreDest').value.trim();
-    const countRaw = document.getElementById('setupBatchCount').value.trim();
-    const errEl = document.getElementById('setupError');
-    if (!storeFrom) {
-      errEl.textContent = '请输入调出门店';
-      errEl.style.display = 'block'; return;
-    }
-    if (!store) {
-      errEl.textContent = '请输入调入门店';
-      errEl.style.display = 'block'; return;
-    }
-    if (storeFrom === store) {
-      errEl.textContent = '调出门店和调入门店不能相同';
-      errEl.style.display = 'block'; return;
-    }
-    if (!countRaw || !/^\d+$/.test(countRaw) || parseInt(countRaw) < 1) {
-      errEl.textContent = '单据数量请填写大于0的正整数';
-      errEl.style.display = 'block'; return;
-    }
-    errEl.style.display = 'none';
-    batchStoreFrom = storeFrom;
-    batchStoreName = store;
-    batchTotalCount = parseInt(countRaw);
-    if (continueBatchNo > 0 && continueBatchNo <= batchTotalCount) {
-      currentBatchNo = continueBatchNo;
-    } else {
-      // 新建调拨单：检查该调入门店是否已有记录，自动分配下一个可用单号
-      const existingForDest = transfers.filter(t => t.storeDest === store && t.batchNo === 1);
-      if (existingForDest.length > 0) {
-        const maxBatch = transfers.filter(t => t.storeDest === store)
-          .reduce((max, t) => Math.max(max, t.batchNo || 1), 0);
-        currentBatchNo = maxBatch + 1;
-        if (currentBatchNo > batchTotalCount) batchTotalCount = currentBatchNo;
-      } else {
-        currentBatchNo = 1;
-      }
-    }
-    continueBatchNo = 0;
-    saveBatchSetup();
-    document.getElementById('batchSetupModal').classList.remove('open');
-    updateBatchUI();
-    toast('✅ 已设置：' + storeFrom + ' → ' + store + '，共 ' + batchTotalCount + ' 单', 'success');
-  });
+  // 调拨单设置提示
   function updateBatchHint() {
-    const from = document.getElementById('setupStoreFrom').value.trim();
-    const dest = document.getElementById('setupStoreDest').value.trim();
-    const hintEl = document.getElementById('setupBatchHint');
-    if (!from || !dest || from === dest) { hintEl.style.display = 'none'; return; }
-    const existing = transfers.filter(t => t.storeDest === dest);
-    if (existing.length > 0) {
-      const maxBatch = existing.reduce((max, t) => Math.max(max, t.batchNo || 1), 0);
-      hintEl.innerHTML = '⚠️ <b>' + esc(dest) + '</b> 已有记录（第1~' + maxBatch + '单），<b>将创建第' + (maxBatch + 1) + '单</b>';
-      hintEl.style.display = 'block';
-    } else {
-      hintEl.style.display = 'none';
-    }
+    var from = document.getElementById('setupStoreFrom').value.trim();
+    var dest = document.getElementById('setupStoreDest').value.trim();
+    var hintEl = document.getElementById('setupBatchHint');
+    if (!hintEl) return;
+    if (from || dest) hintEl.textContent = '🏪 ' + (from || '?') + ' → ' + (dest || '?');
+    else hintEl.textContent = '';
   }
-  document.getElementById('setupStoreFrom').addEventListener('input', updateBatchHint);
-  document.getElementById('setupStoreDest').addEventListener('input', updateBatchHint);
-  document.getElementById('btnCloseSetup').addEventListener('click', () => {
-    document.getElementById('batchSetupModal').classList.remove('open');
-  });
-  document.getElementById('btnEditBatchSetup').addEventListener('click', () => {
-    openBatchSetupModal();
-    document.getElementById('setupStoreFrom').value = batchStoreFrom;
-    document.getElementById('setupStoreDest').value = batchStoreName;
-    document.getElementById('setupBatchCount').value = batchTotalCount;
-    document.getElementById('setupStoreFrom').focus();
-  });
-  document.getElementById('btnResetBatch').addEventListener('click', () => {
-    batchStoreName = '';
-    batchTotalCount = 1;
-    currentBatchNo = 1;
-    saveBatchSetup();
-    updateBatchUI();
-    toast('🔄 已重置调拨单设置', 'success');
-    // 自动弹出设置弹窗，调出门店默认带出
-    openBatchSetupModal();
-    document.getElementById('setupStoreFrom').value = batchStoreFrom;
-    document.getElementById('setupStoreDest').value = '';
-    document.getElementById('setupBatchCount').value = '1';
-    document.getElementById('setupStoreFrom').focus();
-  });
-  document.getElementById('btnPrevBatch').addEventListener('click', () => {
-    if (currentBatchNo > 1) {
-      currentBatchNo--;
-      updateBatchUI();
-    }
-  });
-  document.getElementById('btnNextBatch').addEventListener('click', () => {
-    if (currentBatchNo < batchTotalCount) {
-      currentBatchNo++;
-      updateBatchUI();
-    }
-  });
-
-  // ===== 居中警告弹窗（自动消失） =====
-  function showCenterAlert(msg) {
-    document.getElementById('alertMsg').textContent = msg;
-    document.getElementById('alertPopup').classList.add('open');
-    setTimeout(() => document.getElementById('alertPopup').classList.remove('open'), 2000);
-  }
-
-  // ===== 自定义确认弹窗（居中显示在手机页面） =====
+  // 自定义确认弹窗
   function showConfirm(opts) {
-    const modal = document.getElementById('confirmModal');
+    var modal = document.getElementById('confirmModal');
     document.getElementById('confirmTitle').textContent = opts.title || '确认操作';
     document.getElementById('confirmMsg').innerHTML = opts.msg || '确定要执行此操作吗？';
-    const okBtn = document.getElementById('confirmOk');
+    var okBtn = document.getElementById('confirmOk');
     okBtn.textContent = opts.okText || '确认';
-    okBtn.className = opts.danger ? 'confirm-btn-danger' : 'confirm-btn-danger';
-    document.getElementById('confirmCancel').onclick = () => modal.classList.remove('open');
-    okBtn.onclick = () => {
-      modal.classList.remove('open');
-      if (opts.onOk) opts.onOk();
-    };
+    okBtn.className = 'confirm-btn-danger';
+    document.getElementById('confirmCancel').onclick = function() { modal.classList.remove('open'); };
+    okBtn.onclick = function() { modal.classList.remove('open'); if (opts.onOk) opts.onOk(); };
     modal.classList.add('open');
   }
 
-  // 商品库按钮
-  // 清空商品库
-  document.getElementById('btnClearProducts').addEventListener('click', () => {
-    if (products.length === 0) { toast('商品库已为空', ''); return; }
-    showConfirm({
-      title: '清空全部商品？',
-      msg: '共有 <b>' + products.length + '</b> 个商品，此操作不可恢复！',
-      danger: true,
-      onOk: () => {
-        showConfirm({
-          title: '再次确认',
-          msg: '真的要删除全部 <b>' + products.length + '</b> 个商品吗？',
-          danger: true,
-          okText: '确认删除',
-          onOk: () => {
-            products = [];
-            saveProducts();
-            renderProducts();
-            toast('✅ 已清空全部商品', 'success');
-          }
-        });
-      }
-    });
-  });
-
-  document.getElementById('btnAddProduct').addEventListener('click', () => openProductModal(null));
-
-  
-
-  // 导入 Excel 表格
-  document.getElementById('btnImportExcel').addEventListener('click', () => {
-    const input = document.createElement('input');
-    input.type = 'file'; input.accept = '.xlsx,.xls';
-    input.onchange = (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        try {
-          const data = new Uint8Array(ev.target.result);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const sheet = workbook.Sheets[workbook.SheetNames[0]];
-          const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-          if (json.length < 2) { toast('表格为空或只有表头', 'error'); return; }
-
-          const headers = json[0].map(h => String(h).trim());
-          	          let bIdx = headers.findIndex(h => h.includes('条形码') || h.includes('条码'));
-	          if (bIdx < 0) bIdx = headers.findIndex(h => h.includes('商品编码') && !h.includes('关联'));
-          let nIdx = headers.findIndex(h => h.includes('商品名称'));
-          if (nIdx < 0) nIdx = headers.findIndex(h => h.includes('名称'));
-          let cIdx = headers.findIndex(h => h.includes('商品编码') && !h.includes('关联'));
-          let uIdx = headers.findIndex(h => h.includes('基本单位') || h.includes('单位'));
-
-          if (bIdx < 0 || nIdx < 0) { toast('未找到"条形码"和"商品名称"列', 'error'); return; }
-
-          let added = 0, skipped = 0, multiBarcode = 0, filterZb = 0;
-          for (let i = 1; i < json.length; i++) {
-            const row = json[i];
-            if (!row || !row[bIdx] || !row[nIdx]) continue;
-            let barcode = String(row[bIdx]).trim();
-            const name = String(row[nIdx]).trim();
-            if (!barcode || !name) continue;
-
-            // 处理多个条码（逗号分隔）
-            const barcodes = barcode.split(',').map(b => b.trim()).filter(b => b);
-            if (barcodes.length > 1) multiBarcode++;
-
-            for (const bc of barcodes) {
-              if (!bc) continue;
-              if (/ZB$/i.test(bc)) { filterZb++; continue; }
-              if (products.some(p => p.barcode === bc)) { skipped++; continue; }
-              const unitVal = uIdx >= 0 && row[uIdx] ? String(row[uIdx]).trim() || '个' : '个';
-              const codeVal = cIdx >= 0 && row[cIdx] ? String(row[cIdx]).trim() : '';
-              products.push({ barcode: bc, name, code: codeVal, unit: unitVal, spec: '', createdAt: new Date().toISOString() });
-              added++;
-            }
-          }
-          saveProducts();
-          renderProducts();
-          toast('✅ 导入 '+added+' 个商品'+(filterZb?'，剔除 '+filterZb+' 个ZB条码':'')+(skipped?'，跳过 '+skipped+' 个重复':'')+(multiBarcode?'（含 '+multiBarcode+' 行多条码）':''), 'success');
-        } catch(err) {
-          toast('❌ 导入失败：'+err.message, 'error');
-        }
-      };
-      reader.readAsArrayBuffer(file);
-    };
-    input.click();
-  });
-
-    // Modal
-  document.querySelectorAll('.modalClose').forEach(b => b.addEventListener('click', () => b.closest('.modal').classList.remove('open')));
-  document.getElementById('productModal').addEventListener('click', e => { if (e.target === e.currentTarget) e.target.classList.remove('open'); });
-  document.getElementById('recordModal').addEventListener('click', e => { if (e.target === e.currentTarget) e.target.classList.remove('open'); });
-
-  document.getElementById('exportInfoModal').addEventListener('click', e => { if (e.target === e.currentTarget) e.target.classList.remove('open'); });
-  document.getElementById('batchSetupModal').addEventListener('click', e => { if (e.target === e.currentTarget) e.target.classList.remove('open'); });
-  document.getElementById('setupStoreFrom').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') document.getElementById('setupStoreDest').focus();
-  });
-  document.getElementById('setupStoreDest').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') document.getElementById('setupBatchCount').focus();
-  });
-  document.getElementById('setupBatchCount').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') document.getElementById('btnSetupConfirm').click();
-  });
-
-  // 保存记录
-  document.getElementById('btnSaveRecord').addEventListener('click', () => {
-    const id = document.getElementById('recModalId').value;
-    const barcode = document.getElementById('recModalBarcode').value.trim();
-    const name = document.getElementById('recModalName').textContent.trim();
-    const qty = parseInt(document.getElementById('recModalQty').value);
-    const boxNo = parseInt(document.getElementById('recModalBox').value);
-    if (!barcode || !name || name === '-' || name === '未查到商品信息' || !qty || qty < 1) {
-      document.getElementById('recModalError').style.display = 'block';
-      return;
-    } else {
-      document.getElementById('recModalError').style.display = 'none';
-    }
-    if (!boxNo || boxNo < 1) { toast('请输入有效箱号', 'error'); return; }
-    const idx = transfers.findIndex(r => r.id === id);
-    if (idx >= 0) {
-      transfers[idx].barcode = barcode;
-      transfers[idx].productName = name;
-      transfers[idx].quantity = qty;
-      transfers[idx].boxNo = boxNo;
-      saveTransfers();
-      renderRecords();
-      updateBoxUI();
-      document.getElementById('recordModal').classList.remove('open');
-      toast('✅ 已更新', 'success');
-    }
-  });
-
-  // 编辑弹窗中条码变化 → 自动匹配商品库
-  document.getElementById('recModalBarcode').addEventListener('input', () => {
-    const code = document.getElementById('recModalBarcode').value.trim();
-    const matched = products.find(p => p.barcode === code);
-    document.getElementById('recModalName').textContent = matched ? matched.name : (code ? '未查到商品信息' : '-');
-    if (matched) document.getElementById('recModalError').style.display = 'none';
-  });
-
-  // 更新调入门店筛选选项
-  function updateStoreFilter() {
-    const sel = document.getElementById('selectStoreFilter');
-    const currentVal = sel.value;
-    const stores = new Set();
-    transfers.forEach(r => { if (r.toStore) stores.add(r.toStore); if (r.storeDest) stores.add(r.storeDest); });
-    const sorted = [...stores].sort();
-    sel.innerHTML = '<option value="all">调入门店</option>' + sorted.map(s => '<option value="'+esc(s)+'">'+esc(s)+'</option>').join('');
-    sel.value = currentVal;
+  // 确认调拨单设置
+  function confirmBatchSetup() {
+    var from = document.getElementById('setupStoreFrom').value.trim();
+    var dest = document.getElementById('setupStoreDest').value.trim();
+    var cnt = parseInt(document.getElementById('setupBatchCount').value);
+    var errEl = document.getElementById('setupError');
+    if (!from || !dest) { errEl.textContent = '请填写调出/调入门店'; errEl.style.display = 'block'; return; }
+    if (from === dest) { errEl.textContent = '调出和调入门店不能相同'; errEl.style.display = 'block'; return; }
+    if (!cnt || cnt < 1) { errEl.textContent = '单据数量至少为1'; errEl.style.display = 'block'; return; }
+    errEl.style.display = 'none';
+    if (continueBatchNo > 0) { currentBatchNo = continueBatchNo; continueBatchNo = 0; }
+    else { currentBatchNo = batchTotalCount > 0 && cnt === batchTotalCount ? currentBatchNo : 1; }
+    batchStoreFrom = from; batchStoreName = dest; batchTotalCount = cnt;
+    saveBatchSetup(); document.getElementById('batchSetupModal').classList.remove('open');
+    checkBasicInfo(); updateBatchUI(); updateBoxUI();
+    if (document.getElementById('scannerOverlay').classList.contains('open')) openScanner();
   }
-  document.getElementById('selectStoreFilter').addEventListener('change', renderRecords);
-  document.getElementById('btnSaveProduct').addEventListener('click', () => {
-    const barcode = document.getElementById('modalBarcode').value.trim();
-    const name = document.getElementById('modalName').value.trim();
-    const unit = document.getElementById('modalUnit').value.trim() || '个';
-    const spec = document.getElementById('modalSpec').value.trim();
-    const editId = document.getElementById('modalEditId').value;
-    if (!barcode) { toast('请输入条码', 'error'); return; }
-    if (!name) { toast('请输入商品名称', 'error'); return; }
-    if (editId) {
-      const idx = products.findIndex(p => p.barcode === editId);
-      if (idx >= 0) {
-        if (barcode !== editId && products.some(p => p.barcode === barcode)) { toast('条码已存在', 'error'); return; }
-        products[idx] = { ...products[idx], barcode, name, unit, spec };
-      }
-    } else {
-      if (products.some(p => p.barcode === barcode)) { toast('条码已存在', 'error'); return; }
-      products.push({ barcode, name, unit, spec, createdAt: new Date().toISOString() });
-    }
-    saveProducts();
-    document.getElementById('productModal').classList.remove('open');
-    renderProducts();
-    toast(editId ? '已更新' : '已添加', 'success');
-    if (currentScan && currentScan.barcode === barcode) {
-      const m = products.find(p => p.barcode === barcode);
-      if (m) {
-        currentScan.product = m;
-        document.getElementById('scanProductName').textContent = m.name;
-      }
-    }
-  });
-
-  // 导出 CSV
-  
-  // 全选 / 取消全选
-  document.getElementById('checkSelectAll').addEventListener('change', (e) => {
-    const checked = e.target.checked;
-    document.querySelectorAll('.order-check').forEach(cb => cb.checked = checked);
-    document.querySelectorAll('.order-check').forEach(cb => {
-      const order = cb.dataset.order;
-      if (checked) selectedOrders.add(order);
-      else selectedOrders.delete(order);
-    });
-    updateSelectAllState();
-  });
-
-  // 单据复选框事件委托
-  document.getElementById('recordsList').addEventListener('change', (e) => {
-    if (e.target.classList.contains('order-check')) {
-      const order = e.target.dataset.order;
-      if (e.target.checked) selectedOrders.add(order);
-      else selectedOrders.delete(order);
-      updateSelectAllState();
-    }
-  });
-
-  // 检查选中记录是否缺少调拨信息，如缺少则弹出填写窗
+  // 扫码提交记录
+  function submitScanRecord() {
+    if (!currentScan) return;
+    var qty = parseInt(document.getElementById('inputQuantity').value);
+    if (qty < 1) { toast('数量至少为1', 'error'); return; }
+    var code = currentScan.barcode;
+    var pName = currentScan.product ? currentScan.product.name : '未查到';
+    var pCode = currentScan.product ? (currentScan.product.code || '') : '';
+    var exist = transfers.find(function(t) { return t.barcode === code && t.storeDest === batchStoreName && t.batchNo === currentBatchNo && t.boxNo === currentBoxNo; });
+    if (exist) { exist.quantity = qty; }
+    else { transfers.push({ id: uid(), barcode: code, productName: pName, productCode: pCode, quantity: qty, boxNo: currentBoxNo, storeDest: batchStoreName, batchNo: currentBatchNo, fromStore: batchStoreFrom || '', timestamp: new Date().toISOString() }); }
+    saveTransfers(); renderRecords(); renderLatestRecords(); updateBoxUI();
+    toast('✅ 已录入 ' + pName + ' ×' + qty, 'success');
+    document.getElementById('inputQuantity').value = ''; document.getElementById('scanResult').classList.add('hidden'); currentScan = null;
+    if (document.getElementById('scannerOverlay').classList.contains('open')) { startScanning(); }
+  }
+  // 导出前检查信息
   function ensureExportInfo(filtered, filename, isDownload) {
-    // 检查是否已有任何调拨信息
-    const hasInfo = filtered.some(r => r.orderNo && r.fromStore && r.toStore);
-    if (hasInfo) {
-      doExport(filtered, filename, isDownload);
-      return;
-    }
-    // 弹出填写窗口，预填调出/调入门店
-    const modal = document.getElementById('exportInfoModal');
-    if (batchStoreFrom) {
-      document.getElementById('exportInfoFromStore').value = batchStoreFrom;
-    }
-    if (batchStoreName) {
-      document.getElementById('exportInfoToStore').value = batchStoreName;
-    }
+    var hasInfo = filtered.some(function(r) { return r.orderNo && r.fromStore && r.toStore; });
+    if (hasInfo) { doExport(filtered, filename, isDownload); return; }
+    var modal = document.getElementById('exportInfoModal');
+    if (batchStoreFrom) document.getElementById('exportInfoFromStore').value = batchStoreFrom;
+    if (batchStoreName) document.getElementById('exportInfoToStore').value = batchStoreName;
     modal.classList.add('open');
     document.getElementById('exportInfoOrderNo').focus();
-    modal.dataset.filename = filename;
-    modal.dataset.isDownload = isDownload ? '1' : '0';
-    // 保存filtered数据的引用
+    modal.dataset.filename = filename; modal.dataset.isDownload = isDownload ? '1' : '0';
     window._exportData = filtered;
   }
-
   function doExport(filtered, filename, isDownload) {
-    if (isDownload) {
-      downloadXLSXWithData(filtered, filename);
-    } else {
-      exportCSVWithData(filtered, filename);
-    }
+    if (isDownload) downloadXLSXWithData(filtered, filename);
+    else exportCSVWithData(filtered, filename);
   }
 
+  function showPageError(msg) {
+    var el = document.getElementById('pageError');
+    if (el) { el.textContent = '⚠️ ' + msg; el.style.display = 'block'; }
+  }
 
-  // 下载选中
-  document.getElementById('btnDownloadSelected').addEventListener('click', () => {
-    const checkedOrders = new Set();
-    document.querySelectorAll('.order-check:checked').forEach(cb => checkedOrders.add(cb.dataset.order));
-    if (checkedOrders.size === 0) { toast('请先选择要导出的单据', 'error'); return; }
-    const filtered = transfers.filter(r => checkedOrders.has((r.storeDest || '未填门店') + '|' + (r.batchNo || 1)));
-    if (filtered.length === 0) { toast('所选单据无记录', 'error'); return; }
-    ensureExportInfo(filtered, '调拨记录_选中_'+today(), true);
-  });
+  // ===== Init 第一步：基础数据加载 =====
+  try { loadData(); } catch(e) { showPageError('数据加载失败: ' + e.message); }
+  try { checkExpiration(); } catch(e) {}
+  try { loadBatchSetup(); } catch(e) {}
+  try { updateBatchUI(); } catch(e) {}
+  updateStatus('加载中...', false);
 
-  // 导出到KPOS
-  document.getElementById('btnExportKPOS').addEventListener('click', exportKPOS);
-
-  // 导出信息确认弹窗提交
-  document.getElementById('btnExportInfoConfirm').addEventListener('click', () => {
-    const orderNo = document.getElementById('exportInfoOrderNo').value.trim();
-    const fromStore = document.getElementById('exportInfoFromStore').value.trim();
-    const toStore = document.getElementById('exportInfoToStore').value.trim();
-    const transferType = document.getElementById('exportInfoTransferType').value;
-    const manager = document.getElementById('exportInfoManager').value.trim();
-    const handler = document.getElementById('exportInfoHandler').value.trim();
-    const inboundNo = document.getElementById('exportInfoInboundNo').value.trim();
-    const note = document.getElementById('exportInfoNote').value.trim();
-    const errEl = document.getElementById('exportInfoError');
-    if (!orderNo || !fromStore || !toStore || !transferType || !manager || !handler) {
-      errEl.textContent = '请填写完整信息（单号、门店、类型、店长、经手人为必填项）';
-      errEl.style.display = 'block'; return;
-    }
-    if (fromStore === toStore) { errEl.textContent = '调出门店和调入门店不能相同'; errEl.style.display = 'block'; return; }
-    errEl.style.display = 'none';
-
-    // 应用到当前调拨单的所有记录
-    const filtered = window._exportData || [];
-    filtered.forEach(function(r) {
-      r.orderNo = orderNo;
-      r.fromStore = fromStore;
-      r.toStore = toStore;
-      r.inboundNo = inboundNo;
-      r.transferType = transferType;
-      r.note = note;
-      r.storeManager = manager;
-      r.handler = handler;
+  // ===== Init 第二步：绑定基础按钮事件（优先！不依赖远程/扫码引擎） =====
+  try {
+    // Tab switching
+    document.querySelectorAll('.tab-bar button').forEach(b => {
+      b.addEventListener('click', () => switchTab(b.dataset.section));
     });
-    // 同步保存到 localStorage
-    saveTransfers();
-    renderRecords();
-
-    document.getElementById('exportInfoModal').classList.remove('open');
-    const filename = document.getElementById('exportInfoModal').dataset.filename || '调拨记录_选中_'+today();
-    const isDownload = document.getElementById('exportInfoModal').dataset.isDownload === '1';
-    doExport(filtered, filename, isDownload);
-  });
-
-  // 清空记录
-  document.getElementById('btnClearRecords').addEventListener('click', () => {
-    if (transfers.length === 0) { toast('暂无记录可清空', ''); return; }
-    showConfirm({
-      title: '清空全部记录？',
-      msg: '共有 <b>' + transfers.length + '</b> 条调拨记录，此操作不可恢复！<br><br>建议先导出备份。',
-      danger: true,
-      okText: '确认清空',
-      onOk: () => {
-        showConfirm({
-          title: '再次确认',
-          msg: '真的要删除全部 <b>' + transfers.length + '</b> 条记录吗？<br>删除后不可恢复！',
-          danger: true,
-          okText: '确认删除',
-          onOk: () => {
-            transfers = [];
-            saveTransfers();
-            renderRecords();
-            updateBoxUI();
-            toast('✅ 已清空全部记录', 'success');
-          }
-        });
-      }
+    // 扫码图标
+    document.getElementById('btnOpenScanner').addEventListener('click', () => openScanner());
+    // 关闭扫码
+    document.getElementById('btnCloseScanner').addEventListener('click', closeScanner);
+    // 切换摄像头
+    document.getElementById('btnToggleCam2').addEventListener('click', () => { useBackCamera = !useBackCamera; stopCamera(); mediaStream = null; openScanner(); });
+    // 调拨单设置
+    document.getElementById('btnSetupConfirm').addEventListener('click', confirmBatchSetup);
+    document.getElementById('btnCloseSetup').addEventListener('click', () => document.getElementById('batchSetupModal').classList.remove('open'));
+    // 箱管理
+    document.getElementById('btnNewBox').addEventListener('click', () => {
+      if (currentBoxNo >= maxCreatedBoxNo) { if (transfers.filter(t => t.boxNo === currentBoxNo && t.storeDest === batchStoreName && t.batchNo === currentBatchNo).length === 0) { toast('当前箱无记录，无法新建箱', 'error'); return; } }
+      currentBoxNo = ++maxCreatedBoxNo; updateBoxUI(); toast('已新建第 ' + currentBoxNo + ' 箱', 'success');
     });
-  });
+    document.getElementById('btnPrevBox').addEventListener('click', () => { if (currentBoxNo > 1) { currentBoxNo--; updateBoxUI(); } });
+    document.getElementById('btnNextBox').addEventListener('click', () => { if (currentBoxNo < maxCreatedBoxNo) { currentBoxNo++; updateBoxUI(); } });
+    document.getElementById('btnPrevBatch').addEventListener('click', () => { if (currentBatchNo > 1) { currentBatchNo--; updateBatchUI(); } });
+    document.getElementById('btnNextBatch').addEventListener('click', () => { if (currentBatchNo < batchTotalCount) { currentBatchNo++; updateBatchUI(); } });
+  } catch(e) { showPageError('按钮绑定失败: ' + e.message); }
 
-  // 存储状态检测
-  setTimeout(() => {
-    try {
-      localStorage.setItem('_test_', '1');
-      localStorage.removeItem('_test_');
-      storageOk = true;
-    } catch(e) {
-      storageOk = false;
-    }
-    updateStorageStatus();
-    if (!storageOk) {
-      toast('📌 提示：当前环境无法自动保存，请用右上角「💾存」手动备份数据', '');
-    }
-  }, 1000);
+  // ===== Init 第三步：渲染页面 =====
+  try { renderProducts(); renderRecords(); renderLatestRecords(); } catch(e) {}
+  updateStatus('已加载', true);
 
-  // 事件委托：记录列表
-  document.getElementById('recordsList').addEventListener('click', (e) => {
-    // 删除整张单据（双重确认）
-    const delBtn = e.target.closest('.btn-del-order');
-    if (delBtn) {
-      const groupKey = delBtn.dataset.order;
-      const parts = groupKey.split('|');
-      const delStore = parts[0];
-      const delBatch = parseInt(parts[1]) || 1;
-      const count = transfers.filter(r => (r.storeDest || '未填门店') === delStore && (r.batchNo || 1) === delBatch).length;
-      const displayName = delStore + ' · 第' + delBatch + '单';
-      showConfirm({
-        title: '删除此单据？',
-        msg: '确定要删除 <b>' + esc(displayName) + '</b> 的全部 <b>' + count + '</b> 条记录吗？',
-        danger: true, okText: '确认删除',
-        onOk: () => {
-          showConfirm({
-            title: '再次确认',
-            msg: '真的要删除全部 <b>' + count + '</b> 条记录吗？<br>删除后不可恢复！',
-            danger: true, okText: '确认删除',
-            onOk: () => {
-              transfers = transfers.filter(r => (r.storeDest || '未填门店') !== delStore || (r.batchNo || 1) !== delBatch);
-              selectedOrders.delete(groupKey);
-              saveTransfers();
-              renderRecords();
-              updateSelectAllState();
-              toast('已删除 ' + esc(displayName), 'success');
-            }
-          });
-        }
-      });
-      return;
-    }
-    // 点击记录项编辑
-    const item = e.target.closest('.record-item');
-    if (item) {
-      const rec = transfers.find(r => r.id === item.dataset.id);
-      if (rec) openRecordModal(rec);
-    }
-  });
+  // ===== Init 第四步：异步加载远程商品库（不阻塞页面） =====
+  (async function() {
+    try { await fetchRemoteProducts(); updateStatus('已同步', true); } catch(e) { updateStatus('本地模式', true); }
+    try { if (typeof initBarcodeDetector === 'function') await initBarcodeDetector(); } catch(e) { showPageError('扫码引擎加载失败，手动输入可用'); }
+    checkBasicInfo();
+    updateBoxUI();
+    updateBatchUI();
+  })();
 
   // 手动输入条码
-  document.getElementById('btnManualMatch').addEventListener('click', () => {
-    const code = document.getElementById('manualBarcode').value.trim();
-    if (!code) { toast('请输入条码', 'error'); return; }
-    if (!batchStoreName) {
-      openBatchSetupModal();
-      return;
-    }
-    var remoteMatch = remoteProductMap.get(code);
-    const matched = products.find(p => p.barcode === code) || (remoteMatch ? { barcode: code, name: remoteMatch.n, code: remoteMatch.c } : null);
-    currentScan = { barcode: code, product: matched || null };
-
-    document.getElementById('scanResult').classList.remove('hidden');
-    document.getElementById('scanBarcode').textContent = code;
-
-    if (matched) {
-      document.getElementById('scanProductName').textContent = matched.name;
-      if (matched.code) {
-        document.getElementById('scanProductCode').textContent = matched.code;
-        document.getElementById('scanCodeRow').classList.remove('hidden');
-      } else {
-        document.getElementById('scanCodeRow').classList.add('hidden');
+  try {
+    document.getElementById('btnManualMatch').addEventListener('click', () => {
+      var code = document.getElementById('manualBarcode').value.trim();
+      if (!code) { toast('请输入条码', 'error'); return; }
+      if (!batchStoreName) { openBatchSetupModal(); return; }
+      var rm = remoteProductMap.get(code);
+      var matched = products.find(p => p.barcode === code) || (rm ? { barcode: code, name: rm.n, code: rm.c } : null);
+      currentScan = { barcode: code, product: matched || null };
+      var r = document.getElementById('scanResult');
+      r.classList.remove('hidden');
+      document.getElementById('scanBarcode').textContent = code;
+      document.getElementById('scanProductName').textContent = matched ? matched.name : '未查到商品信息';
+      document.getElementById('scanProductCode').textContent = matched && matched.code ? matched.code : '';
+      document.getElementById('scanCodeRow').className = matched && matched.code ? 'mb-2' : 'mb-2 hidden';
+      document.getElementById('scanAddProduct').className = matched ? 'hidden' : '';
+      document.getElementById('scanBoxNo').textContent = '第 ' + currentBoxNo + ' 箱';
+    });
+    document.getElementById('manualBarcode').addEventListener('keydown', function(e) { if (e.key === 'Enter') document.getElementById('btnManualMatch').click(); });
+    // 数量提交
+    document.getElementById('inputQuantity').addEventListener('change', submitScanRecord);
+    document.getElementById('inputQuantity').addEventListener('keydown', function(e) { if (e.key === 'Enter') submitScanRecord(); });
+    // 清除扫码结果
+    document.getElementById('btnClearScan').addEventListener('click', () => { document.getElementById('scanResult').classList.add('hidden'); currentScan = null; });
+    // 手动添加商品
+    document.getElementById('btnAddManualProduct').addEventListener('click', () => {
+      var name = document.getElementById('inputManualName').value.trim();
+      if (!name || !currentScan) return;
+      products.push({ barcode: currentScan.barcode, name: name, unit: '个', spec: '', createdAt: new Date().toISOString() });
+      saveProducts();
+      currentScan.product = { barcode: currentScan.barcode, name: name };
+      document.getElementById('scanProductName').textContent = name;
+      document.getElementById('scanAddProduct').classList.add('hidden');
+      toast('已添加商品', 'success');
+    });
+    // 清空记录
+    document.getElementById('btnClearRecords').addEventListener('click', () => {
+      if (transfers.length === 0) { toast('暂无记录', ''); return; }
+      showConfirm({ title: '清空全部记录？', msg: '共有 <b>' + transfers.length + '</b> 条记录<br>建议先导出备份', danger: true, okText: '确认清空', onOk: () => {
+        showConfirm({ title: '再次确认', msg: '真的要删除全部 ' + transfers.length + ' 条记录吗？', danger: true, okText: '确认删除', onOk: () => { transfers = []; saveTransfers(); renderRecords(); updateBoxUI(); toast('✅ 已清空', 'success'); } });
+      }});
+    });
+    // 导出
+    document.getElementById('btnExportKPOS').addEventListener('click', exportKPOS);
+    document.getElementById('btnDownloadSelected').addEventListener('click', () => {
+      var checked = new Set();
+      document.querySelectorAll('.order-check:checked').forEach(cb => checked.add(cb.dataset.order));
+      if (checked.size === 0) { toast('请先选择单据', 'error'); return; }
+      var filtered = transfers.filter(r => checked.has((r.storeDest || '未填门店') + '|' + (r.batchNo || 1)));
+      if (filtered.length === 0) { toast('所选单据无记录', 'error'); return; }
+      ensureExportInfo(filtered, '调拨记录_'+today(), true);
+    });
+    // 全选
+    document.getElementById('checkSelectAll').addEventListener('change', function(e) {
+      document.querySelectorAll('.order-check').forEach(cb => { cb.checked = e.target.checked; var o = cb.dataset.order; if (e.target.checked) selectedOrders.add(o); else selectedOrders.delete(o); });
+      updateSelectAllState();
+    });
+    // 记录列表事件委托
+    document.getElementById('recordsList').addEventListener('change', function(e) {
+      if (e.target.classList.contains('order-check')) { var o = e.target.dataset.order; if (e.target.checked) selectedOrders.add(o); else selectedOrders.delete(o); updateSelectAllState(); }
+    });
+    document.getElementById('recordsList').addEventListener('click', function(e) {
+      var delBtn = e.target.closest('.btn-del-order');
+      if (delBtn) {
+        var groupKey = delBtn.dataset.order, parts = groupKey.split('|'), ds = parts[0], db = parseInt(parts[1]) || 1, cnt = transfers.filter(r => (r.storeDest||'未填门店') === ds && (r.batchNo||1) === db).length;
+        showConfirm({ title: '删除此单据？', msg: '确定删除 <b>' + ds + ' · 第' + db + '单</b> 的 ' + cnt + ' 条记录？', danger: true, okText: '确认删除', onOk: () => {
+          showConfirm({ title: '再次确认', msg: '真的要删除吗？不可恢复！', danger: true, okText: '确认删除', onOk: () => { transfers = transfers.filter(r => (r.storeDest||'未填门店') !== ds || (r.batchNo||1) !== db); saveTransfers(); renderRecords(); updateSelectAllState(); toast('已删除', 'success'); } });
+        }});
+        return;
       }
-    } else {
-      document.getElementById('scanProductName').textContent = '未查到商品信息';
-      document.getElementById('scanCodeRow').classList.add('hidden');
-    }
-    // 手动添加商品区域：未查到时显示，查到时隐藏
-    const addSection2 = document.getElementById('scanAddProduct');
-    if (matched) {
-      addSection2.classList.add('hidden');
-      setTimeout(() => document.getElementById('inputQuantity').focus(), 300);
-    } else {
-      addSection2.classList.remove('hidden');
-      document.getElementById('inputManualName').value = '';
-      setTimeout(() => document.getElementById('inputManualName').focus(), 300);
-    }
-    document.getElementById('scanBoxNo').textContent = '第 ' + currentBoxNo + ' 箱';
-    const batchInfoEl = document.getElementById('scanBatchInfo');
-    if (batchStoreName) {
-      document.getElementById('scanBatchRow').style.display = 'block';
-      const skuCnt = getBatchSKUCount(batchStoreName, currentBatchNo);
-      batchInfoEl.textContent = batchStoreName + ' · 第 ' + currentBatchNo + ' 单（' + skuCnt + '/50 SKU）';
-    } else {
-      document.getElementById('scanBatchRow').style.display = 'none';
-    }
-  });
+      var item = e.target.closest('.record-item');
+      if (item) { var rec = transfers.find(r => r.id === item.dataset.id); if (rec) openRecordModal(rec); }
+    });
+    // 搜索/筛选
+    document.getElementById('inputSearchRecord').addEventListener('input', renderRecords);
+    document.getElementById('selectStoreFilter').addEventListener('change', renderRecords);
+    // Modal关闭
+    document.querySelectorAll('.modalClose').forEach(b => b.addEventListener('click', function() { this.closest('.modal').classList.remove('open'); }));
+    document.getElementById('productModal').addEventListener('click', function(e) { if (e.target === e.currentTarget) e.target.classList.remove('open'); });
+    document.getElementById('recordModal').addEventListener('click', function(e) { if (e.target === e.currentTarget) e.target.classList.remove('open'); });
+    document.getElementById('batchSetupModal').addEventListener('click', function(e) { if (e.target === e.currentTarget) e.target.classList.remove('open'); });
+    // 保存记录
+    document.getElementById('btnSaveRecord').addEventListener('click', () => {
+      var id = document.getElementById('recModalId').value;
+      var barcode = document.getElementById('recModalBarcode').value.trim();
+      var name = document.getElementById('recModalName').textContent.trim();
+      var qty = parseInt(document.getElementById('recModalQty').value);
+      var boxNo = parseInt(document.getElementById('recModalBox').value);
+      if (!barcode || !name || name === '-' || !qty || qty < 1) { document.getElementById('recModalError').style.display = 'block'; return; }
+      document.getElementById('recModalError').style.display = 'none';
+      var idx = transfers.findIndex(r => r.id === id);
+      if (idx >= 0) { transfers[idx].barcode = barcode; transfers[idx].productName = name; transfers[idx].quantity = qty; transfers[idx].boxNo = boxNo; saveTransfers(); renderRecords(); updateBoxUI(); document.getElementById('recordModal').classList.remove('open'); toast('✅ 已更新', 'success'); }
+    });
+    document.getElementById('recModalBarcode').addEventListener('input', function() {
+      var code = this.value.trim();
+      var m = products.find(p => p.barcode === code);
+      document.getElementById('recModalName').textContent = m ? m.name : (code ? '未查到' : '-');
+      if (m) document.getElementById('recModalError').style.display = 'none';
+    });
+    // 存储检测
+    setTimeout(() => {
+      try { localStorage.setItem('_test_','1'); localStorage.removeItem('_test_'); storageOk = true; } catch(e) { storageOk = false; }
+      updateStorageStatus();
+      if (!storageOk) toast('当前环境无法自动保存，请手动备份', '');
+    }, 1000);
+  } catch(e) { showPageError('功能初始化失败: ' + e.message); }
 
-  document.getElementById('manualBarcode').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') document.getElementById('btnManualMatch').click();
-  });
+  // 补充缺失的事件绑定
+  try {
+    // 调拨单设置弹窗输入
+    document.getElementById('setupStoreFrom').addEventListener('input', updateBatchHint);
+    document.getElementById('setupStoreDest').addEventListener('input', updateBatchHint);
+    document.getElementById('setupStoreFrom').addEventListener('keydown', function(e) { if (e.key === 'Enter') document.getElementById('setupStoreDest').focus(); });
+    document.getElementById('setupStoreDest').addEventListener('keydown', function(e) { if (e.key === 'Enter') document.getElementById('setupBatchCount').focus(); });
+    document.getElementById('setupBatchCount').addEventListener('keydown', function(e) { if (e.key === 'Enter') document.getElementById('btnSetupConfirm').click(); });
+    // 商品管理
+    document.getElementById('btnSaveProduct').addEventListener('click', () => {
+      var barcode = document.getElementById('modalBarcode').value.trim();
+      var name = document.getElementById('modalName').value.trim();
+      var unit = document.getElementById('modalUnit').value.trim() || '个';
+      var spec = document.getElementById('modalSpec').value.trim();
+      var editId = document.getElementById('modalEditId').value;
+      if (!barcode || !name) { toast('请填完必填项', 'error'); return; }
+      if (editId) { var idx = products.findIndex(p => p.barcode === editId); if (idx >= 0) products[idx] = { ...products[idx], barcode, name, unit, spec }; }
+      else { if (products.some(p => p.barcode === barcode)) { toast('条码已存在', 'error'); return; } products.push({ barcode, name, unit, spec, createdAt: new Date().toISOString() }); }
+      saveProducts(); document.getElementById('productModal').classList.remove('open'); renderProducts(); toast(editId ? '已更新' : '已添加', 'success');
+    });
+    // 导出信息确认
+    document.getElementById('btnExportInfoConfirm').addEventListener('click', () => {
+      var orderNo = document.getElementById('exportInfoOrderNo').value.trim();
+      var fromStore = document.getElementById('exportInfoFromStore').value.trim();
+      var toStore = document.getElementById('exportInfoToStore').value.trim();
+      var transferType = document.getElementById('exportInfoTransferType').value;
+      var manager = document.getElementById('exportInfoManager').value.trim();
+      var handler = document.getElementById('exportInfoHandler').value.trim();
+      var errEl = document.getElementById('exportInfoError');
+      if (!orderNo || !fromStore || !toStore || !transferType || !manager || !handler) { errEl.textContent = '请填写完整信息'; errEl.style.display = 'block'; return; }
+      errEl.style.display = 'none';
+      (window._exportData || []).forEach(function(r) { r.orderNo = orderNo; r.fromStore = fromStore; r.toStore = toStore; r.transferType = transferType; r.storeManager = manager; r.handler = handler; });
+      saveTransfers(); renderRecords();
+      document.getElementById('exportInfoModal').classList.remove('open');
+      doExport(window._exportData || [], document.getElementById('exportInfoModal').dataset.filename || '调拨记录_'+today(), document.getElementById('exportInfoModal').dataset.isDownload === '1');
+    });
+    // btnAddProduct（商品库添加按钮）
+    document.getElementById('btnAddProduct').addEventListener('click', () => openProductModal(null));
+    // btnClearProducts
+    document.getElementById('btnClearProducts').addEventListener('click', () => {
+      if (products.length === 0) { toast('商品库已为空', ''); return; }
+      showConfirm({ title: '清空商品库？', msg: '共' + products.length + '个商品，不可恢复！', danger: true, onOk: () => {
+        showConfirm({ title: '再次确认', msg: '真的要删除全部商品吗？', danger: true, okText: '确认删除', onOk: () => { products = []; saveProducts(); renderProducts(); toast('已清空', 'success'); } });
+      }});
+    });
+    // 导入Excel
+    document.getElementById('btnImportExcel').addEventListener('click', () => {
+      var input = document.createElement('input');
+      input.type = 'file'; input.accept = '.xlsx,.xls';
+      input.onchange = function(e) {
+        var file = e.target.files[0]; if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function(ev) {
+          try {
+            var data = new Uint8Array(ev.target.result);
+            var workbook = XLSX.read(data, { type: 'array' });
+            var sheet = workbook.Sheets[workbook.SheetNames[0]];
+            var json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            if (json.length < 2) { toast('表格为空', 'error'); return; }
+            var headers = json[0].map(function(h) { return String(h).trim(); });
+            var bIdx = headers.findIndex(function(h) { return h.includes('条形码') || h.includes('条码'); });
+            if (bIdx < 0) bIdx = headers.findIndex(function(h) { return h.includes('商品编码') && !h.includes('关联'); });
+            var nIdx = headers.findIndex(function(h) { return h.includes('商品名称'); });
+            if (nIdx < 0) nIdx = headers.findIndex(function(h) { return h.includes('名称'); });
+            if (bIdx < 0 || nIdx < 0) { toast('未找到条形码和商品名称列', 'error'); return; }
+            var added = 0, skipped = 0;
+            for (var i = 1; i < json.length; i++) {
+              var row = json[i]; if (!row || !row[bIdx] || !row[nIdx]) continue;
+              var bc = String(row[bIdx]).trim(), nm = String(row[nIdx]).trim();
+              if (!bc || !nm) continue;
+              var barcodes = bc.split(',').map(function(b) { return b.trim(); }).filter(function(b) { return b; });
+              barcodes.forEach(function(b) {
+                if (!b) return;
+                if (/ZB$/i.test(b)) return;
+                if (products.some(function(p) { return p.barcode === b; })) { skipped++; return; }
+                products.push({ barcode: b, name: nm, unit: '个', code: '', spec: '', createdAt: new Date().toISOString() });
+                added++;
+              });
+            }
+            saveProducts(); renderProducts();
+            toast('✅ 导入 ' + added + ' 个商品' + (skipped ? '，跳过 ' + skipped + ' 个重复' : ''), 'success');
+          } catch(err) { toast('导入失败: ' + err.message, 'error'); }
+        };
+        reader.readAsArrayBuffer(file);
+      };
+      input.click();
+    });
+  } catch(e) { showPageError('附加功能绑定失败: ' + e.message); }
 
   // 页面可见性变化 - 回到页面时恢复相机
   document.addEventListener('visibilitychange', () => {
@@ -2657,13 +2221,4 @@
     }
   });
 
-  // 初始化扫码页、箱管理和调拨单
-  checkBasicInfo();
-  updateBoxUI();
-  updateBatchUI();
-
 })();
-</script>
-</div>
-</body>
-</html>
