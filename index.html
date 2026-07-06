@@ -641,6 +641,7 @@
   let currentBatchNo = 1;
   let continueBatchNo = 0;
   let lastBarcode = '';
+  const BARCODE_VOTES = {};
 
   // ===== 远程商品库同步 =====
   const SECRET_KEY = 'KkV_Tr@nsf3r#2026!';
@@ -1122,13 +1123,23 @@
     }
   }
 
-  // 条码校验：过滤乱码，防止重复识别
+  // 条码校验+时间窗口投票：0=无效, 1=检测到（等待确认）, 2=确认通过
   function validateBarcode(code) {
-    if (!code || code.length < 3 || code.length > 50) return false;
-    if (/[^0-9A-Za-z\- ]/.test(code)) return false;
-    if (code === lastBarcode) return false;
-    lastBarcode = code;
-    return true;
+    if (!code || code.length < 3 || code.length > 50) return 0;
+    if (/[^0-9A-Za-z\- ]/.test(code)) return 0;
+    if (code === lastBarcode) return 0;  // 已确认过
+    const now = Date.now();
+    for (const k in BARCODE_VOTES) {
+      if (now - BARCODE_VOTES[k] > 3000) delete BARCODE_VOTES[k];
+    }
+    if (BARCODE_VOTES[code]) {
+      delete BARCODE_VOTES[code];
+      lastBarcode = code;
+      return 2;  // 确认通过
+    } else {
+      BARCODE_VOTES[code] = now;
+      return 1;  // 首次检测到，等待再次确认
+    }
   }
 
   function stopCamera() {
@@ -1159,17 +1170,18 @@
           const hint = document.getElementById('scanHintFull');
           if (results.length > 0 && results[0].rawValue) {
             const code = results[0].rawValue;
-            if (validateBarcode(code)) {
+            const vr = validateBarcode(code);
+            if (vr === 2) {
               hint.textContent = '✅ 识别成功！';
               setTimeout(() => onBarcodeDetected(code), 200);
-            } else {
-              hint.textContent = '📡 检测到条码，校验中...';
+            } else if (vr === 1) {
+              hint.textContent = '📡 检测到条码，确认中...';
             }
-          } else if (hint.textContent.includes('✅') || hint.textContent.includes('校验')) {
+          } else if (hint.textContent.includes('✅') || hint.textContent.includes('确认')) {
             hint.textContent = '📷 扫描中...';
           }
         } catch(e) {}
-      }, 100);
+      }, 200);
     } else {
       // Quagga 引擎
       document.getElementById('scanHintFull').textContent = '📷 Quagga 扫描中...';
@@ -1193,14 +1205,15 @@
             const hint = document.getElementById('scanHintFull');
             if (r && r.codeResult && r.codeResult.code) {
               const code = r.codeResult.code;
-              if (validateBarcode(code)) {
+              const vr = validateBarcode(code);
+              if (vr === 2) {
                 clearInterval(scanTimer); scanTimer = null;
                 hint.textContent = '✅ 识别成功！';
                 setTimeout(() => onBarcodeDetected(code), 200);
-              } else {
-                hint.textContent = '📡 检测到条码，校验中...';
+              } else if (vr === 1) {
+                hint.textContent = '📡 检测到条码，确认中...';
               }
-            } else if (hint.textContent.includes('✅') || hint.textContent.includes('校验')) {
+            } else if (hint.textContent.includes('✅') || hint.textContent.includes('确认')) {
               hint.textContent = '📷 Quagga 扫描中...';
             }
           });
