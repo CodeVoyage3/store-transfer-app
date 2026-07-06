@@ -1003,8 +1003,8 @@
 
   // ===== 扫码引擎 =====
   async function initBarcodeDetector() {
-    // Android设备BarcodeDetector普遍不稳定，优先走Quagga引擎
-    if ('BarcodeDetector' in window && !isAndroid) {
+    // BarcodeDetector支持任意角度条码识别，优先使用（所有设备）
+    if ('BarcodeDetector' in window) {
       const formats = ['code_128','ean_13','ean_8','upc_a','upc_e','code_39','code_93','itf','qr_code'];
       try {
         const supported = await BarcodeDetector.getSupportedFormats();
