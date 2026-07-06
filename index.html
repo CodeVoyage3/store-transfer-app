@@ -174,21 +174,33 @@
     .scanner-view video { width: 100%; height: 100%; object-fit: cover; }
     .scanner-frame {
       position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
-      width: 260px; height: 325px;
-      border: 2.5px solid rgba(255,255,255,0.7);
-      border-radius: 12px; pointer-events: none;
+      width: min(85%, 320px); height: 28%; max-height: 100px;
+      border: 2.5px solid rgba(255,206,0,0.9);
+      border-radius: 6px; pointer-events: none;
+      box-shadow: 0 0 0 9999px rgba(0,0,0,0.45);
     }
+    .scanner-frame::before, .scanner-frame::after {
+      content: ''; position: absolute;
+      width: 12px; height: 12px; border-color: #FFCE00;
+    }
+    .scanner-frame::before { top: -1px; left: -1px; border-top: 3px solid; border-left: 3px solid; border-radius: 3px 0 0 0; }
+    .scanner-frame::after { top: -1px; right: -1px; border-top: 3px solid; border-right: 3px solid; border-radius: 0 3px 0 0; }
+    .scanner-frame .lb, .scanner-frame .rb {
+      position: absolute; bottom: -1px; width: 12px; height: 12px; border-color: #FFCE00;
+    }
+    .scanner-frame .lb { left: -1px; border-bottom: 3px solid; border-left: 3px solid; border-radius: 0 0 0 3px; }
+    .scanner-frame .rb { right: -1px; border-bottom: 3px solid; border-right: 3px solid; border-radius: 0 0 3px 0; }
     .scanner-scanline {
       position: absolute; left: 50%; transform: translateX(-50%);
-      width: 240px; height: 2px;
-      background: linear-gradient(90deg, transparent, #7C3AED, #10B981, #7C3AED, transparent);
-      box-shadow: 0 0 16px rgba(124,58,237,0.6);
-      animation: scanMove 2s ease-in-out infinite;
+      width: min(80%, 300px); height: 2px;
+      background: linear-gradient(90deg, transparent, #FF6B00, #FFCE00, #FF6B00, transparent);
+      box-shadow: 0 0 12px rgba(255,206,0,0.6);
+      animation: scanMove 1.5s ease-in-out infinite;
       pointer-events: none;
     }
     @keyframes scanMove {
-      0%, 100% { top: calc(50% - 152px); }
-      50% { top: calc(50% + 152px); }
+      0%, 100% { top: calc(50% - 45px); }
+      50% { top: calc(50% + 45px); }
     }
     .scanner-hint-full {
       position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
@@ -470,7 +482,7 @@
     <video id="video" autoplay playsinline muted></video>
     <div class="scanner-frame"></div>
     <div class="scanner-scanline"></div>
-    <div class="scanner-hint-full" id="scanHintFull">📷 将条码对准框内，模糊请点击画面</div>
+    <div class="scanner-hint-full" id="scanHintFull">📷 将条码放入扫描框中</div>
     <div class="scanner-loading" id="scannerLoading">
       <div class="scanner-loading-icon">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
@@ -1006,7 +1018,7 @@
   async function initBarcodeDetector() {
     // BarcodeDetector支持任意角度条码+QR码，所有设备优先使用
     if ('BarcodeDetector' in window) {
-      const formats = ['code_128','ean_13','ean_8','upc_a','upc_e','code_39','code_93','itf','qr_code'];
+      const formats = ['ean_13','ean_8'];   // 只开启商品条码常用码制
       try {
         const supported = await BarcodeDetector.getSupportedFormats();
         const available = formats.filter(f => supported.includes(f));
@@ -1067,8 +1079,8 @@
     const ok = await startCamera();
     if (!ok) {
       loading.querySelector('.scanner-loading-text').textContent = '❌ 摄像头授权失败';
-      loading.querySelector('.scanner-loading-sub').textContent = '请在系统设置中允许摄像头权限';
-      hint.textContent = '⚠️ 摄像头访问被拒绝';
+      loading.querySelector('.scanner-loading-sub').textContent = '请授予摄像头权限，或在下方手动输入条码';
+      hint.textContent = '⚠️ 摄像头被拒绝，请手动输入条码';
       return;
     }
 
@@ -1082,8 +1094,8 @@
       const video = document.getElementById('video');
       // Android对焦优化：指定连续自动对焦，降低分辨率提高对焦成功率
       // Android设备使用更低分辨率减少处理压力
-      const camW = isAndroid ? 640 : 960;
-      const camH = isAndroid ? 480 : 540;
+      const camW = 1280;
+      const camH = 720;
       const constraints = {
         video: {
           facingMode: useBackCamera ? 'environment' : 'user',
@@ -1132,7 +1144,7 @@
         if (!hasAutoFocus) {
           document.getElementById('scanHintFull').textContent = '📷 对焦中...';
           setTimeout(() => {
-            document.getElementById('scanHintFull').textContent = '📷 将条码对准框内，模糊请点击画面';
+            document.getElementById('scanHintFull').textContent = '📷 点击画面手动对焦';
           }, 150);
         }
       };
@@ -1152,18 +1164,23 @@
     if (!cw || !ch) return null;
     const vw = video.videoWidth;
     const vh = video.videoHeight;
-    // object-fit: cover 缩放下，计算扫码框在视频帧中的对应区域
+    // 横向条码框：宽85%容器，高28%容器（适配一维条码）
+    const boxW = Math.min(cw * 0.85, 320);
+    const boxH = Math.min(ch * 0.28, 100);
+    // object-fit: cover 缩放
     const scale = Math.max(cw / vw, ch / vh);
     const visibleW = cw / scale;
     const visibleH = ch / scale;
     const offsetX = (vw - visibleW) / 2;
     const offsetY = (vh - visibleH) / 2;
-    const sx = offsetX + (cw - 260) / (2 * scale);
-    const sy = offsetY + (ch - 325) / (2 * scale);
-    const sw = Math.max(4, 260 / scale);
-    const sh = Math.max(4, 325 / scale);
-    // 放大2倍输出，条码更清晰
-    return { sx, sy, sw, sh, dw: 520, dh: 650 };
+    const sx = offsetX + (cw - boxW) / (2 * scale);
+    const sy = offsetY + (ch - boxH) / (2 * scale);
+    const sw = Math.max(4, boxW / scale);
+    const sh = Math.max(4, boxH / scale);
+    // 放大检测，条码更清晰
+    const dw = Math.round(boxW * 2);
+    const dh = Math.round(boxH * 2);
+    return { sx, sy, sw, sh, dw, dh };
   }
 
   // 条码校验+时间窗口投票：0=无效, 1=检测到（等待确认）, 2=确认通过
@@ -1173,7 +1190,7 @@
     if (code === lastBarcode) return 0;  // 已确认过
     const now = Date.now();
     for (const k in BARCODE_VOTES) {
-      if (now - BARCODE_VOTES[k] > 3000) delete BARCODE_VOTES[k];
+      if (now - BARCODE_VOTES[k] > 1000) delete BARCODE_VOTES[k];
     }
     if (BARCODE_VOTES[code]) {
       delete BARCODE_VOTES[code];
@@ -1224,12 +1241,13 @@
             const code = results[0].rawValue;
             const vr = validateBarcode(code);
             if (vr === 2) {
-              hint.textContent = '✅ 识别成功！';
-              setTimeout(() => onBarcodeDetected(code), 200);
+              const r = autoAddToBatch(code);
+              hint.textContent = '✅ ' + r.name + ' ×' + r.qty;
+              setTimeout(() => { if (isScanning) hint.textContent = '📷 继续扫描...'; }, 600);
             } else if (vr === 1) {
               hint.textContent = '📡 检测到条码，确认中...';
             }
-          } else if (hint.textContent.includes('✅') || hint.textContent.includes('确认')) {
+          } else if (hint.textContent.includes('✅') || hint.textContent.includes('确认') || hint.textContent.includes('继续')) {
             hint.textContent = '📷 扫描中...';
           }
         } catch(e) {}
@@ -1247,9 +1265,17 @@
         if (!isScanning || !video.videoWidth || decoding) return;
         try {
           decoding = true;
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          ctx.drawImage(video, 0, 0);
+          // 裁剪到扫码框区域，减少解码数据量
+          const crop = getScanBoxCrop();
+          if (crop) {
+            canvas.width = crop.dw;
+            canvas.height = crop.dh;
+            ctx.drawImage(video, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, crop.dw, crop.dh);
+          } else {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+          }
           const results = await zbarDecoder.decode(canvas);
           decoding = false;
           const hint = document.getElementById('scanHintFull');
@@ -1257,9 +1283,9 @@
             const code = results[0].decode;
             const vr = validateBarcode(code);
             if (vr === 2) {
-              clearInterval(scanTimer); scanTimer = null;
-              hint.textContent = '✅ 识别成功！';
-              setTimeout(() => onBarcodeDetected(code), 200);
+              const r = autoAddToBatch(code);
+              hint.textContent = '✅ ' + r.name + ' ×' + r.qty;
+              setTimeout(() => { if (isScanning) hint.textContent = '📷 继续扫描...'; }, 600);
             } else if (vr === 1) {
               hint.textContent = '📡 检测到条码，确认中...';
             }
@@ -1322,6 +1348,37 @@
         scanTimer = setInterval(() => {}, 1000);
       }
     }
+  }
+
+  // 连续扫码：自动添加到当前调拨单，不关闭扫码界面
+  function autoAddToBatch(code) {
+    // 震动+提示音
+    try { navigator.vibrate(80); } catch(e) {}
+    try {
+      const ac = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ac.createOscillator();
+      const g = ac.createGain();
+      osc.connect(g); g.connect(ac.destination);
+      osc.frequency.value = 1200; g.gain.value = 0.1;
+      osc.start(); setTimeout(() => { osc.stop(); ac.close(); }, 100);
+    } catch(e) {}
+
+    // 查找商品信息
+    var rm = remoteProductMap.get(code);
+    const matched = products.find(p => p.barcode === code) || (rm ? { barcode: code, name: rm.n, code: rm.c } : null);
+    const pName = matched ? matched.name : '未查到';
+    const pCode = matched ? (matched.code || '') : '';
+
+    // 同一调拨单+同一箱+同一条码 → 累计数量
+    const exist = transfers.find(t => t.barcode === code && t.storeDest === batchStoreName && t.batchNo === currentBatchNo && t.boxNo === currentBoxNo);
+    if (exist) {
+      exist.quantity = (exist.quantity || 1) + 1;
+      exist.timestamp = new Date().toISOString();
+    } else {
+      transfers.push({ id: uid(), barcode: code, productName: pName, productCode: pCode, quantity: 1, boxNo: currentBoxNo, storeDest: batchStoreName, batchNo: currentBatchNo, fromStore: batchStoreFrom || '', timestamp: new Date().toISOString() });
+    }
+    saveTransfers();
+    return { name: pName, qty: exist ? exist.quantity : 1, added: !!exist };
   }
 
   function onBarcodeDetected(code) {
