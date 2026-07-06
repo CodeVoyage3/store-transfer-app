@@ -290,7 +290,10 @@
   <div class="flex-row">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1F2937" stroke-width="2" stroke-linecap="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M12 22V12"/><path d="M3.3 7l8.7 5 8.7-5"/></svg>
     <span style="font-size:17px;font-weight:700;">门店调拨</span>
+    <span style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
     <span id="storageStatus" style="font-size:10px;padding:2px 8px;border-radius:10px;background:rgba(0,0,0,0.08);color:#6B7280;">检查中...</span>
+    <span id="remoteStatus" style="font-size:9px;padding:1px 6px;border-radius:8px;background:rgba(0,0,0,0.05);color:#9CA3AF;"></span>
+    </span>
   </div>
 
 </div>
@@ -397,7 +400,8 @@
       <div class="mb-2"><label>商品名称</label><div id="scanProductName" style="font-size:15px;font-weight:600;">-</div></div>
       <!-- 手动添加商品（条码未查到时显示） -->
       <div id="scanAddProduct" class="hidden" style="margin-bottom:8px;padding:10px 12px;background:#FEF2F2;border-radius:10px;">
-        <div style="font-size:12px;color:#DC2626;font-weight:500;margin-bottom:6px;">⚠️ 该条码未查到商品信息，请手动添加</div>
+        <div style="font-size:12px;color:#DC2626;font-weight:500;margin-bottom:6px;">⚠️ 该条码未查到商品信息</div>
+        <div style="font-size:11px;color:#6B7280;margin-bottom:6px;">可从 Excel 导入商品库，或手动添加：</div>
         <div class="flex-row" style="gap:6px;">
           <input id="inputManualName" class="input" style="flex:1;" placeholder="输入商品名称" />
           <button id="btnAddManualProduct" class="btn btn-sm btn-green" style="width:auto;white-space:nowrap;padding:8px 12px;">➕ 添加</button>
