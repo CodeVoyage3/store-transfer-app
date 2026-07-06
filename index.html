@@ -414,8 +414,8 @@
 
     <!-- 最近扫码记录 -->
     <div class="card" style="padding:10px 14px;">
-      <div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:6px;">📋 扫码记录</div>
-      <div id="latestScanList"></div>
+      <div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:6px;">📋 扫码记录（最近20条）</div>
+      <div id="latestScanList" style="max-height:400px;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
     </div>
 
   </div>
@@ -675,7 +675,7 @@
   const KEY_BATCH_SETUP = 'st_batch_setup';
   let products = [], transfers = [];
   let currentScan = null;
-  let latestRecords = [];
+  // let latestRecords = [];（改为直接从 transfers 读取）
   let storageOk = false;
   // 是否使用后置摄像头
   let useBackCamera = true;
@@ -1398,28 +1398,26 @@
     modal.classList.add('open');
   }
 
-  // ===== 扫码记录（最近10条） =====
+  // ===== 扫码记录（最近20条，从 transfers 直接读取） =====
   function renderLatestRecords() {
     const container = document.getElementById('latestScanList');
-    if (latestRecords.length === 0) {
+    var items = transfers.slice().sort(function(a,b) { return (b.timestamp||'').localeCompare(a.timestamp||''); }).slice(0, 20);
+    if (items.length === 0) {
       container.innerHTML = '<div style="text-align:center;padding:10px 0;font-size:12px;color:#9CA3AF;">暂无扫码记录</div>';
       return;
     }
-    container.innerHTML = latestRecords.map(r =>
-      '<div style="display:flex;align-items:center;padding:4px 0;border-bottom:1px solid #F3F4F6;font-size:12px;">' +
-      '<span style="color:#6B7280;flex-shrink:0;">条码 </span>' +
-      '<span class="font-mono" style="flex:1;color:#374151;font-weight:500;">' + esc(r.barcode) + '</span>' +
-      '<span style="color:#6B7280;flex-shrink:0;margin-left:6px;">数量 </span>' +
-      '<span style="color:#4F46E5;font-weight:700;">' + r.quantity + '</span>' +
-      '<span style="color:#9CA3AF;margin-left:6px;">第' + r.boxNo + '箱</span>' +
-      (r.batchStore ? '<span style="color:#10B981;margin-left:6px;font-size:11px;">' + esc(r.batchStore) + '</span>' : '') +
-      '</div>'
-    ).join('');
-  }
-  function addLatestRecord(barcode, quantity, boxNo) {
-    latestRecords.unshift({ barcode, quantity, boxNo, batchStore: batchStoreName || '' });
-    if (latestRecords.length > 10) latestRecords.pop();
-    renderLatestRecords();
+    container.innerHTML = items.map(function(r) {
+      return '<div style="display:flex;align-items:center;padding:6px 0;border-bottom:1px solid #F3F4F6;font-size:12px;">' +
+        '<div style="flex:1;min-width:0;">' +
+        '<div style="font-weight:500;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(r.productName || '未知') + '</div>' +
+        '<div style="font-size:10px;color:#9CA3AF;">' + esc(r.barcode) + '</div>' +
+        '</div>' +
+        '<div style="text-align:right;flex-shrink:0;">' +
+        '<div><span style="font-weight:700;color:#4F46E5;">' + (r.quantity||0) + '</span><span style="color:#9CA3AF;font-size:11px;"> 件</span></div>' +
+        '<div style="font-size:10px;color:#9CA3AF;">第' + (r.boxNo||1) + '箱' + (r.storeDest ? ' · ' + esc(r.storeDest) : '') + '</div>' +
+        '</div>' +
+        '</div>';
+    }).join('');
   }
 
   // ===== Export XLSX（按模板格式导出，支持合并单元格，优先分享，备选下载） =====
