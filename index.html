@@ -257,7 +257,6 @@
     .confirm-btn-cancel { background: #F3F4F6; color: #6B7280; }
     .confirm-btn-danger { background: #EF4444; color: white; }
   </style>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
   <script src="xlsx.core.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
@@ -1003,7 +1002,7 @@
 
   // ===== 扫码引擎 =====
   async function initBarcodeDetector() {
-    // BarcodeDetector支持任意角度条码识别，优先使用（所有设备）
+    // BarcodeDetector支持任意角度条码+QR码，所有设备优先使用
     if ('BarcodeDetector' in window) {
       const formats = ['code_128','ean_13','ean_8','upc_a','upc_e','code_39','code_93','itf','qr_code'];
       try {
@@ -1014,9 +1013,6 @@
           return true;
         }
       } catch(e) {}
-    }
-    if (typeof Html5Qrcode !== 'undefined') {
-      return true;
     }
     return false;
   }
@@ -1227,52 +1223,10 @@
         detectingBusy = false;
       }, 200);
     } else {
-      // html5-qrcode 备用引擎（BarcodeDetector不可用时启用，支持旋转+QR码）
-      document.getElementById('scanHintFull').textContent = '📷 备用引擎扫描中...';
-      const video = document.getElementById('video');
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      const html5Qr = new Html5Qrcode('scannerView');
-      let decoding = false;
-      let scanStartTime = Date.now();
-      // 辅助函数：canvas转File
-      function canvasToFile(cvs) {
-        return new Promise(resolve => cvs.toBlob(b => {
-          resolve(new File([b], 'frame.jpg', {type:'image/jpeg'}));
-        }, 'image/jpeg', 0.8));
-      }
-      scanTimer = setInterval(async () => {
-        if (!isScanning || !video.videoWidth || decoding) return;
-        try {
-          decoding = true;
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          ctx.drawImage(video, 0, 0);
-          const file = await canvasToFile(canvas);
-          const result = await html5Qr.scanFileV2(file, false);
-          decoding = false;
-          const code = result.decodedText;
-          const vr = validateBarcode(code);
-          const hint = document.getElementById('scanHintFull');
-          if (vr === 2) {
-            clearInterval(scanTimer); scanTimer = null;
-            hint.textContent = '✅ 识别成功！';
-            setTimeout(() => onBarcodeDetected(code), 200);
-          } else if (vr === 1) {
-            hint.textContent = '📡 检测到条码，确认中...';
-          }
-        } catch(e) {
-          decoding = false;
-          const hint = document.getElementById('scanHintFull');
-          // 超时提示
-          if (Date.now() - scanStartTime > 8000) {
-            hint.textContent = '📷 请调整角度或靠近条码...';
-            scanStartTime = Date.now();
-          } else if (!hint.textContent.includes('检测') && !hint.textContent.includes('成功')) {
-            hint.textContent = '📷 备用引擎扫描中...';
-          }
-        }
-      }, 400);
+      // BarcodeDetector不可用：显示提示但保持摄像头预览
+      document.getElementById('scanHintFull').textContent = '⚠️ 当前浏览器不支持扫码，请升级浏览器或使用Chrome';
+      // 空循环保持摄像头预览不黑屏
+      scanTimer = setInterval(() => {}, 1000);
     }
   }
 
