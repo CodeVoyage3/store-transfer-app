@@ -269,7 +269,7 @@
     .confirm-btn-cancel { background: #F3F4F6; color: #6B7280; }
     .confirm-btn-danger { background: #EF4444; color: white; }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+  <script src="quagga.min.js"></script>
   <script src="xlsx.core.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
@@ -481,7 +481,6 @@
   </div>
   <div id="scanToast" class="toast" style="position:absolute;top:50px;left:50%;transform:translateX(-50%);z-index:999;padding:8px 18px;border-radius:10px;background:rgba(5,150,105,0.95);color:white;font-size:14px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,0.3);opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap;"></div>
   <div class="scanner-view" id="scannerView">
-    <video id="video" autoplay playsinline muted></video>
     <div class="scanner-frame"></div>
     <div class="scanner-scanline"></div>
     <div class="scanner-hint-full" id="scanHintFull">📷 将条码放入扫描框中</div>
@@ -639,10 +638,6 @@
   let products = [], transfers = [];
   let currentScan = null;
   let latestRecords = [];
-  let mediaStream = null;
-  let scanTimer = null;
-  let isScanning = false;
-  let barcodeDetector = null;
   let storageOk = false;
   // 是否使用后置摄像头
   let useBackCamera = true;
@@ -655,11 +650,13 @@
   let currentBatchNo = 1;
   let continueBatchNo = 0;
   let lastBarcode = '';
-  const BARCODE_VOTES = {};
-  let detectingBusy = false;
   const isAndroid = /Android/i.test(navigator.userAgent);
-  let hasAutoFocus = false;
-  let zxingReader = null;
+  // QuaggaJS 扫码引擎状态
+  let quaggaInitialized = false;
+  let quaggaRunning = false;
+  let lastDetectedCode = '';
+  let lastDetectedTime = 0;
+  const SCAN_DEDUP_MS = 1000;
 
   // ===== 全局错误捕获 =====
   window.onerror = function(msg, url, line) {
@@ -1032,41 +1029,13 @@
     checkBasicInfo();
   }
 
-  // ===== 扫码引擎（全浏览器兼容） =====
-  // 核心引擎: @zxing/library（所有浏览器均可用）
-  // 加速引擎: BarcodeDetector（可选，仅在支持时使用）
-  async function initBarcodeDetector() {
-    // 核心：初始化 @zxing/library
-    if (typeof ZXing === 'undefined' || !ZXing.BrowserMultiFormatReader) {
-      // CDN加载失败时，尝试从备用CDN动态加载
-      try {
-        const resp = await fetch('https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js');
-        const code = await resp.text();
-        new Function(code)();
-      } catch(e2) {
-        console.warn('ZXing fallback also failed:', e2);
-      }
+  // ===== 扫码引擎: QuaggaJS =====
+  async function initQuaggaEngine() {
+    if (typeof Quagga !== 'undefined') {
+      quaggaInitialized = true;
+      return true;
     }
-    if (typeof ZXing !== 'undefined' && ZXing.BrowserMultiFormatReader) {
-      try {
-        zxingReader = new ZXing.BrowserMultiFormatReader();
-      } catch(e) { console.warn('ZXing init failed:', e); }
-    }
-    // 加速：如浏览器支持 BarcodeDetector，额外初始化
-    if ('BarcodeDetector' in window) {
-      const formats = ['ean_13','ean_8','code_128'];
-      try {
-        const supported = await BarcodeDetector.getSupportedFormats();
-        const available = formats.filter(f => supported.includes(f));
-        if (available.length > 0) {
-          barcodeDetector = new BarcodeDetector({ formats: available });
-        }
-      } catch(e) {}
-      try { barcodeDetector = new BarcodeDetector(); } catch(e2) {
-        try { barcodeDetector = new BarcodeDetector({ formats: formats }); } catch(e3) {}
-      }
-    }
-    return !!(zxingReader || barcodeDetector);
+    return false;
   }
 
   // ===== 打开全屏相机 =====
@@ -1081,155 +1050,130 @@
 
     overlay.classList.add('open');
 
-    if (!mediaStream) {
-      // 第一次：显示启动覆盖层，需要用户点击
-      loading.classList.remove('hidden');
-      hint.textContent = '📷 点击启动相机';
-    } else {
-      // 已有摄像头流：直接显示
-      loading.classList.add('hidden');
-      const video = document.getElementById('video');
-      video.srcObject = mediaStream;
-      try { await video.play(); } catch(e) {}
-      hint.textContent = '📷 扫描中...';
-      startScanning();
+    if (!quaggaInitialized) {
+      hint.textContent = '⚠️ 扫码引擎未加载';
+      return;
     }
+
+    // 显示启动层，点击启动
+    loading.classList.remove('hidden');
+    loading.querySelector('.scanner-loading-text').textContent = '点击启动相机';
+    hint.textContent = '📷 点击启动相机';
   }
 
-  // 启动覆盖层点击 → 正式启动摄像头
-  document.getElementById('scannerLoading').addEventListener('click', async () => {
+  // 启动覆盖层点击 → 启动Quagga扫码
+  document.getElementById('scannerLoading').addEventListener('click', async function() {
     const loading = document.getElementById('scannerLoading');
     const hint = document.getElementById('scanHintFull');
     loading.querySelector('.scanner-loading-text').textContent = '启动中...';
     hint.textContent = '⏳ 正在请求摄像头...';
 
-    const ok = await startCamera();
-    if (!ok) {
-      loading.querySelector('.scanner-loading-text').textContent = '❌ 摄像头授权失败';
-      loading.querySelector('.scanner-loading-sub').textContent = '请授予摄像头权限，或在下方手动输入条码';
-      hint.textContent = '⚠️ 摄像头被拒绝，请手动输入条码';
-      return;
-    }
-
     loading.classList.add('hidden');
-    hint.textContent = '📷 扫描中...';
-    startScanning();
+    hint.textContent = '📷 启动扫码中...';
+    startQuagga();
   });
 
-  async function startCamera() {
-    try {
-      const video = document.getElementById('video');
-      // Android对焦优化：指定连续自动对焦，降低分辨率提高对焦成功率
-      // Android设备使用更低分辨率减少处理压力
-      // 安卓对焦优化：用中等分辨率（低分辨率=大像素=更好对焦）
-      const camW = isAndroid ? 800 : 1280;
-      const camH = isAndroid ? 600 : 720;
-      const constraints = {
-        video: {
+  function startQuagga() {
+    if (quaggaRunning) {
+      try { Quagga.stop(); } catch(e) {}
+      quaggaRunning = false;
+    }
+    const hint = document.getElementById('scanHintFull');
+
+    Quagga.init({
+      inputStream: {
+        name: 'Live',
+        type: 'LiveStream',
+        target: document.querySelector('#scannerView'),
+        constraints: {
           facingMode: useBackCamera ? 'environment' : 'user',
-          width: { ideal: camW },
-          height: { ideal: camH },
-          focusMode: 'continuous-video'
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        area: {
+          top: '28%',
+          left: '7.5%',
+          width: '85%',
+          height: '28%'
         }
-      };
-      // 部分Android浏览器需要advanced方式指定对焦模式
-      try {
-        mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-      } catch(e) {
-        // 降级方案：去掉focusMode，用基础约束重试
-        try {
-          mediaStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: useBackCamera ? 'environment' : 'user', width: { ideal: camW }, height: { ideal: camH } }
-          });
-        } catch(e2) {
-          try {
-            // 第二降级：标准高清
-            mediaStream = await navigator.mediaDevices.getUserMedia({
-              video: { facingMode: useBackCamera ? 'environment' : 'user', width: { ideal: 1280 }, height: { ideal: 720 } }
-            });
-          } catch(e3) {
-            try {
-              // 第三降级：高分辨率（部分设备高分辨率才能对焦）
-              mediaStream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: useBackCamera ? 'environment' : 'user', width: { ideal: 1920 }, height: { ideal: 1080 } }
-              });
-            } catch(e4) {
-              // 最终降级：最低分辨率
-              mediaStream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: useBackCamera ? 'environment' : 'user', width: { ideal: 480 }, height: { ideal: 360 } }
-              });
+      },
+      decoder: {
+        readers: ['ean_reader', 'ean_8_reader', 'code_128_reader']
+      },
+      locate: true,
+      numOfWorkers: 0,
+      frequency: 10
+    }, function(err) {
+      if (err) {
+        console.error('Quagga init error:', err);
+        // 降级：使用较低分辨率重试
+        Quagga.init({
+          inputStream: {
+            name: 'Live',
+            type: 'LiveStream',
+            target: document.querySelector('#scannerView'),
+            constraints: {
+              facingMode: useBackCamera ? 'environment' : 'user',
+              width: { ideal: 640 },
+              height: { ideal: 480 }
+            },
+            area: {
+              top: '28%',
+              left: '7.5%',
+              width: '85%',
+              height: '28%'
             }
+          },
+          decoder: {
+            readers: ['ean_reader', 'ean_8_reader', 'code_128_reader']
+          },
+          locate: true,
+          numOfWorkers: 0,
+          frequency: 8
+        }, function(err2) {
+          if (err2) {
+            hint.textContent = '❌ 扫码启动失败，请手动输入条码';
+            quaggaRunning = false;
+            return;
           }
+          quaggaRunning = true;
+          hint.textContent = '📷 扫描中...';
+          Quagga.start();
+          setupQuaggaDetected();
+        });
+        return;
+      }
+      quaggaRunning = true;
+      hint.textContent = '📷 扫描中...';
+      Quagga.start();
+      setupQuaggaDetected();
+    });
+  }
+
+  function setupQuaggaDetected() {
+    Quagga.onDetected(function(result) {
+      if (!result || !result.codeResult || !result.codeResult.code) return;
+      handleDetectedBarcode(result.codeResult.code);
+    });
+    // 清除重复定位框以提升性能
+    Quagga.onProcessed(function() {
+      var drawingCtx = Quagga.canvas.ctx.overlay;
+      if (drawingCtx) {
+        var drawingCanvas = Quagga.canvas.dom.overlay;
+        if (drawingCanvas) {
+          drawingCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
         }
       }
-      video.srcObject = mediaStream;
-      await video.play();
-      // 检测是否支持自动对焦，决定提示文案
-      try {
-        const track = mediaStream.getVideoTracks()[0];
-        if (track && track.getCapabilities) {
-          const caps = track.getCapabilities();
-          if (caps.focusMode && caps.focusMode.includes('continuous-video')) {
-            await track.applyConstraints({ advanced: [{ focusMode: 'continuous-video' }] });
-            hasAutoFocus = true;
-          }
-        }
-      } catch(ef) { /* 对焦设置非关键，忽略失败 */ }
-      // 点击视频画面触发重新对焦（仅在无自动对焦时提醒）
-      video.onclick = async function() {
-        try {
-          const t = mediaStream.getVideoTracks()[0];
-          if (t && t.applyConstraints) {
-            await t.applyConstraints({ advanced: [{ focusMode: 'continuous-video' }] });
-          }
-        } catch(e) {}
-        if (!hasAutoFocus) {
-          document.getElementById('scanHintFull').textContent = '📷 对焦中...';
-          setTimeout(() => {
-            document.getElementById('scanHintFull').textContent = '📷 点击画面手动对焦';
-          }, 150);
-        }
-      };
-      return true;
-    } catch(e) {
-      return false;
-    }
+    });
   }
 
-  // 从视频帧裁剪扫码框区域并放大，减少处理数据量提高识别率
-  function getScanBoxCrop() {
-    const video = document.getElementById('video');
-    const container = document.getElementById('scannerView');
-    if (!video || !video.videoWidth || !container) return null;
-    const cw = container.clientWidth;
-    const ch = container.clientHeight;
-    if (!cw || !ch) return null;
-    const vw = video.videoWidth;
-    const vh = video.videoHeight;
-    // 横向条码框：宽85%容器，高28%容器（适配一维条码）
-    const boxW = Math.min(cw * 0.85, 320);
-    const boxH = Math.min(ch * 0.28, 100);
-    // object-fit: cover 缩放
-    const scale = Math.max(cw / vw, ch / vh);
-    const visibleW = cw / scale;
-    const visibleH = ch / scale;
-    const offsetX = (vw - visibleW) / 2;
-    const offsetY = (vh - visibleH) / 2;
-    const sx = offsetX + (cw - boxW) / (2 * scale);
-    const sy = offsetY + (ch - boxH) / (2 * scale);
-    const sw = Math.max(4, boxW / scale);
-    const sh = Math.max(4, boxH / scale);
-    // 放大检测，条码更清晰
-    const dw = Math.round(boxW * 2);
-    const dh = Math.round(boxH * 2);
-    return { sx, sy, sw, sh, dw, dh };
-  }
+  function handleDetectedBarcode(code) {
+    // 去重：同一码 1 秒内不重复录入
+    const now = Date.now();
+    if (code === lastDetectedCode && now - lastDetectedTime < SCAN_DEDUP_MS) return;
+    if (!code || code.length < 3 || code.length > 50) return;
+    if (/[^0-9A-Za-z\- ]/.test(code)) return;
 
-  // 条码校验+双重确认：0=无效, 1=首次检测到, 2=确认通过
-  function validateBarcode(code) {
-    if (!code || code.length < 3 || code.length > 50) return 0;
-    if (/[^0-9A-Za-z\- ]/.test(code)) return 0;
-    if (code === lastBarcode) return 0;
     // EAN-13 校验位验证
     if (/^\d{13}$/.test(code)) {
       var sum = 0;
@@ -1237,145 +1181,45 @@
         sum += parseInt(code[i]) * (i % 2 === 0 ? 1 : 3);
       }
       var check = (10 - (sum % 10)) % 10;
-      if (parseInt(code[12]) !== check) return 0;
+      if (parseInt(code[12]) !== check) return;
     }
-    const now = Date.now();
-    for (const k in BARCODE_VOTES) {
-      if (now - BARCODE_VOTES[k] > 800) delete BARCODE_VOTES[k];
-    }
-    if (BARCODE_VOTES[code]) {
-      delete BARCODE_VOTES[code];
-      lastBarcode = code;
-      setTimeout(function() { if (lastBarcode === code) lastBarcode = ''; }, 1000);
-      return 2;
-    } else {
-      BARCODE_VOTES[code] = now;
-      return 1;
+
+    lastDetectedCode = code;
+    lastDetectedTime = now;
+
+    // 震动 + 提示音
+    try { navigator.vibrate(80); } catch(e) {}
+    try {
+      const ac = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ac.createOscillator();
+      const g = ac.createGain();
+      osc.connect(g); g.connect(ac.destination);
+      osc.frequency.value = 1200; g.gain.value = 0.1;
+      osc.start(); setTimeout(function() { osc.stop(); ac.close(); }, 100);
+    } catch(e) {}
+
+    // 自动添加到调拨单
+    const result = autoAddToBatch(code);
+    renderLatestRecords();
+    renderRecords();
+    updateBoxUI();
+    updateBatchUI();
+
+    var hint = document.getElementById('scanHintFull');
+    hint.textContent = '✅ 已录入: ' + result.name + ' ×' + result.qty;
+    setTimeout(function() {
+      if (quaggaRunning) hint.textContent = '📷 继续扫描...';
+    }, 1500);
+
+    var notif = document.getElementById('scanToast');
+    if (notif) {
+      notif.textContent = '✅ 已录入: ' + result.name + ' ×' + result.qty;
+      notif.classList.add('show');
+      setTimeout(function() { notif.classList.remove('show'); }, 2000);
     }
   }
 
-  function stopCamera() {
-    if (mediaStream) {
-      mediaStream.getTracks().forEach(t => t.stop());
-      mediaStream = null;
-    }
-    if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
-    isScanning = false;
-    barcodeDetector = null;
-  }
-
-  function startScanning() {
-    if (isScanning) return;
-    isScanning = true;
-    const video = document.getElementById('video');
-    const preCanvas = document.createElement('canvas');
-    const preCtx = preCanvas.getContext('2d');
-    let noDetectStart = Date.now();
-    let decoding = false;
-
-    // 图像预处理：裁剪扫码框区域 → 放大1.5x → 灰度 → 对比度增强 → 二值化
-    function preprocessImage() {
-      const crop = getScanBoxCrop();
-      if (!crop) return null;
-      const scale = 1.5;
-      const dw = Math.round(crop.sw * scale);
-      const dh = Math.round(crop.sh * scale);
-      preCanvas.width = dw;
-      preCanvas.height = dh;
-      preCtx.drawImage(video, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, dw, dh);
-      try {
-        const imageData = preCtx.getImageData(0, 0, dw, dh);
-        const d = imageData.data;
-        let sum = 0;
-        for (let i = 0; i < d.length; i += 4) {
-          const gray = d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114;
-          d[i] = d[i+1] = d[i+2] = gray;
-          sum += gray;
-        }
-        // 根据平均亮度自适应增强
-        const avg = sum / (d.length / 4);
-        const threshold = avg < 128 ? 60 : 100;
-        for (let i = 0; i < d.length; i += 4) {
-          const v = d[i];
-          if (v < threshold) d[i] = d[i+1] = d[i+2] = 0;
-          else if (v > 255 - threshold) d[i] = d[i+1] = d[i+2] = 255;
-          else d[i] = d[i+1] = d[i+2] = 128 + (v - 128) * 1.3;
-        }
-        preCtx.putImageData(imageData, 0, 0);
-      } catch(e) {}
-      return { canvas: preCanvas, width: dw, height: dh };
-    }
-
-    function onCode(code, hint) {
-      const vr = validateBarcode(code);
-      if (vr === 2) {
-        const r = autoAddToBatch(code);
-        // 刷新所有数据
-        renderLatestRecords();
-        renderRecords();
-        updateBoxUI();
-        updateBatchUI();
-        hint.textContent = '\u2705 \u5df2\u5f55\u5165: ' + r.name + ' \u00d7' + r.qty;
-        noDetectStart = Date.now();
-        setTimeout(function() {
-          if (isScanning) hint.textContent = '\ud83d\udcf7 \u7ee7\u7eed\u626b\u63cf...';
-        }, 1000);
-      } else if (vr === 1) {
-        hint.textContent = '\ud83d\udce1 \u68c0\u6d4b\u5230\u6761\u7801\uff0c\u786e\u8ba4\u4e2d...';
-      }
-    }
-
-    // 主引擎: @zxing/library (全浏览器支持)
-    // 加速引擎: BarcodeDetector (如支持)
-    const hasBarcodeDetector = !!barcodeDetector;
-
-    if (!zxingReader && !hasBarcodeDetector) {
-      document.getElementById('scanHintFull').textContent = '\u26a0\ufe0f \u6d4f\u89c8\u5668\u4e0d\u652f\u6301\u626b\u7801';
-      scanTimer = setInterval(function() {}, 1000);
-      return;
-    }
-
-    scanTimer = setInterval(async function() {
-      if (!isScanning || !video.videoWidth || decoding) return;
-      decoding = true;
-      try {
-        const hint = document.getElementById('scanHintFull');
-        let code = null;
-
-        // 先尝试 BarcodeDetector（更快，整帧识别，不限区域）
-        if (hasBarcodeDetector) {
-          try {
-            const results = await barcodeDetector.detect(video);
-            if (results && results.length > 0 && results[0].rawValue) {
-              code = results[0].rawValue;
-            }
-          } catch(e) {}
-        }
-
-        // BarcodeDetector 没识别到，走 ZXing + 裁剪预处理
-        if (!code && zxingReader) {
-          try {
-            const prep = preprocessImage();
-            if (prep) {
-              const result = await zxingReader.decodeFromCanvas(prep.canvas);
-              if (result && result.text) code = result.text;
-            }
-          } catch(e2) {
-            // ZXing 在无条码时抛异常，正常行为
-          }
-        }
-
-        if (code) {
-          onCode(code, hint);
-        } else if (Date.now() - noDetectStart > 5000) {
-          hint.textContent = '\ud83d\udcf7 \u8bf7\u5c06\u6761\u7801\u6a2a\u653e\u5728\u9ec4\u8272\u6846\u5185\uff0c\u4fdd\u6301\u5e73\u7a33';
-          noDetectStart = Date.now();
-        }
-      } catch(e) {}
-      decoding = false;
-    }, 200);
-  }
-  // 连续扫码：自动添加到当前调拨单，不关闭扫码界面
+  // ===== 连续扫码：自动添加到当前调拨单，不关闭扫码界面 =====
   function autoAddToBatch(code) {
     // 震动+提示音
     try { navigator.vibrate(80); } catch(e) {}
@@ -1413,64 +1257,13 @@
     return { name: pName, qty: exist ? exist.quantity : 1, added: !!exist };
   }
 
-  function onBarcodeDetected(code) {
-    try { navigator.vibrate(100); } catch(e) {}
-    try {
-      const ac = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = ac.createOscillator();
-      const g = ac.createGain();
-      osc.connect(g); g.connect(ac.destination);
-      osc.frequency.value = 1200; g.gain.value = 0.1;
-      osc.start(); setTimeout(() => { osc.stop(); ac.close(); }, 120);
-    } catch(e) {}
-
-    isScanning = false;
-    if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
-
-    // 关闭全屏相机覆盖层（但不停止摄像头流，实现一次性授权）
-    document.getElementById('scannerOverlay').classList.remove('open');
-
-    var remoteMatch = remoteProductMap.get(code);
-    const matched = products.find(p => p.barcode === code) || (remoteMatch ? { barcode: code, name: remoteMatch.n, code: remoteMatch.c } : null);
-    currentScan = { barcode: code, product: matched || null };
-
-    const r = document.getElementById('scanResult');
-    r.classList.remove('hidden');
-    document.getElementById('scanBarcode').textContent = code;
-    document.getElementById('scanProductName').textContent = matched ? matched.name : '未查到商品信息';
-    // 手动添加商品区域：未查到时显示，查到时隐藏
-    const addSection = document.getElementById('scanAddProduct');
-    if (matched) {
-      addSection.classList.add('hidden');
-      setTimeout(() => document.getElementById('inputQuantity').focus(), 300);
-    } else {
-      addSection.classList.remove('hidden');
-      document.getElementById('inputManualName').value = '';
-      setTimeout(() => document.getElementById('inputManualName').focus(), 300);
-    }
-    if (matched && matched.code) {
-      document.getElementById('scanProductCode').textContent = matched.code;
-      document.getElementById('scanCodeRow').classList.remove('hidden');
-    } else {
-      document.getElementById('scanCodeRow').classList.add('hidden');
-    }
-    document.getElementById('scanBoxNo').textContent = '第 ' + currentBoxNo + ' 箱';
-    const batchInfoEl = document.getElementById('scanBatchInfo');
-    if (batchStoreName) {
-      document.getElementById('scanBatchRow').style.display = 'block';
-      const skuCnt = getBatchSKUCount(batchStoreName, currentBatchNo);
-      batchInfoEl.textContent = batchStoreName + ' · 第 ' + currentBatchNo + ' 单（' + skuCnt + '/50 SKU）';
-    } else {
-      document.getElementById('scanBatchRow').style.display = 'none';
-    }
-  }
-
   // ===== 关闭全屏扫码 =====
   function closeScanner() {
     document.getElementById('scannerOverlay').classList.remove('open');
-    // 不停止 mediaStream — 保持摄像头连接，下次直接使用
-    if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
-    isScanning = false;
+    if (quaggaRunning) {
+      try { Quagga.stop(); } catch(e) {}
+      quaggaRunning = false;
+    }
   }
 
   // ===== Tab =====
@@ -1962,7 +1755,7 @@
     saveTransfers(); renderRecords(); renderLatestRecords(); updateBoxUI();
     toast('✅ 已录入 ' + pName + ' ×' + qty, 'success');
     document.getElementById('inputQuantity').value = ''; document.getElementById('scanResult').classList.add('hidden'); currentScan = null;
-    if (document.getElementById('scannerOverlay').classList.contains('open')) { startScanning(); }
+    if (document.getElementById('scannerOverlay').classList.contains('open') && !quaggaRunning) { startQuagga(); }
   }
   // 导出前检查信息
   function ensureExportInfo(filtered, filename, isDownload) {
@@ -2004,7 +1797,7 @@
     // 关闭扫码
     document.getElementById('btnCloseScanner').addEventListener('click', closeScanner);
     // 切换摄像头
-    document.getElementById('btnToggleCam2').addEventListener('click', () => { useBackCamera = !useBackCamera; stopCamera(); mediaStream = null; openScanner(); });
+    document.getElementById('btnToggleCam2').addEventListener('click', () => { if (quaggaRunning) { try { Quagga.stop(); } catch(e) {} quaggaRunning = false; } useBackCamera = !useBackCamera; openScanner(); });
     // 调拨单设置
     document.getElementById('btnSetupConfirm').addEventListener('click', confirmBatchSetup);
     document.getElementById('btnCloseSetup').addEventListener('click', () => document.getElementById('batchSetupModal').classList.remove('open'));
@@ -2026,7 +1819,7 @@
   // ===== Init 第四步：异步加载远程商品库（不阻塞页面） =====
   (async function() {
     try { await fetchRemoteProducts(); updateStatus('已同步', true); } catch(e) { updateStatus('本地模式', true); }
-    try { if (typeof initBarcodeDetector === 'function') await initBarcodeDetector(); } catch(e) { showPageError('扫码引擎加载失败，手动输入可用'); }
+    try { if (typeof initQuaggaEngine === 'function') await initQuaggaEngine(); } catch(e) { showPageError('扫码引擎加载失败，手动输入可用'); }
     checkBasicInfo();
     updateBoxUI();
     updateBatchUI();
@@ -2230,7 +2023,7 @@
 
   // 页面可见性变化 - 回到页面时恢复相机
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && document.getElementById('scannerOverlay').classList.contains('open') && !mediaStream) {
+    if (!document.hidden && document.getElementById('scannerOverlay').classList.contains('open') && !quaggaRunning) {
       document.getElementById('scannerLoading').classList.remove('hidden');
       document.getElementById('scannerLoading').querySelector('.scanner-loading-text').textContent = '点击启动相机';
     }

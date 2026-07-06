@@ -133,7 +133,7 @@
 ## 技术说明
 
 - 纯 HTML + CSS + JavaScript 单文件应用
-- 扫码引擎：浏览器 BarcodeDetector API（首选）+ @zxing/library（CDN 兜底）
+- 扫码引擎：QuaggaJS（本地库，无需联网，兼容所有现代浏览器）
 - XLSX 导出：SheetJS（xlsx.core.min.js）
 - 无任何后端服务依赖
 - PWA 支持（manifest.json + 图标）
@@ -145,4 +145,5 @@
 | 版本 | 更新内容 |
 |------|---------|
 | v1.0 | 调拨信息锁定态精简显示、店长/经手人必填、占位符优化、15天自动清空 |
-| v1.1 | 扫码引擎大升级：BarcodeDetector + @zxing/library 双引擎、EAN-13/EAN-8/Code 128 码制、双重确认机制、768p~1080p 分辨率、5秒失败提示 |
+| v1.1 | 扫码引擎大升级：BarcodeDetector + @zxing/library 双引擎、EAN-13/EAN-8/Code 128 码制 |
+| v1.2 | 扫码引擎统一为 QuaggaJS（稳定兼容方案）、移除外部 CDN 依赖、优化扫码框布局与提示 |
