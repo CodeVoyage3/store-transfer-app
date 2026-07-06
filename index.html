@@ -269,7 +269,7 @@
     .confirm-btn-cancel { background: #F3F4F6; color: #6B7280; }
     .confirm-btn-danger { background: #EF4444; color: white; }
   </style>
-  <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
   <script src="xlsx.core.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
@@ -1037,6 +1037,16 @@
   // 加速引擎: BarcodeDetector（可选，仅在支持时使用）
   async function initBarcodeDetector() {
     // 核心：初始化 @zxing/library
+    if (typeof ZXing === 'undefined' || !ZXing.BrowserMultiFormatReader) {
+      // CDN加载失败时，尝试从备用CDN动态加载
+      try {
+        const resp = await fetch('https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js');
+        const code = await resp.text();
+        new Function(code)();
+      } catch(e2) {
+        console.warn('ZXing fallback also failed:', e2);
+      }
+    }
     if (typeof ZXing !== 'undefined' && ZXing.BrowserMultiFormatReader) {
       try {
         zxingReader = new ZXing.BrowserMultiFormatReader();
