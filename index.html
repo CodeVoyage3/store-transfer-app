@@ -1223,50 +1223,60 @@
         detectingBusy = false;
       }, 200);
     } else {
-      // Quagga 引擎（Android设备优先使用，曲面条码识别更好）
-      document.getElementById('scanHintFull').textContent = isAndroid ? '📷 Quagga（安卓适配）扫描中...' : '📷 Quagga 扫描中...';
+      // Quagga 引擎（Android设备优先使用，不用裁剪，Quagga自带定位）
+      document.getElementById('scanHintFull').textContent = isAndroid ? '📷 安卓适配扫描中...' : '📷 Quagga 扫描中...';
       const video = document.getElementById('video');
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       let decoding = false;
+      let scanStartTime = Date.now();
       scanTimer = setInterval(() => {
         if (!isScanning || !video.videoWidth || decoding) return;
-        decoding = true;
-        // 裁剪扫码框区域，减少Quagga处理数据量
-        const crop = getScanBoxCrop();
-        if (crop) {
-          canvas.width = crop.dw;
-          canvas.height = crop.dh;
-          ctx.drawImage(video, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, crop.dw, crop.dh);
-        } else {
+        try {
+          decoding = true;
+          // 全帧检测，让Quagga自己定位条码（不做裁剪避免坐标偏差）
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
           ctx.drawImage(video, 0, 0);
-        }
-        canvas.toBlob((blob) => {
-          const url = URL.createObjectURL(blob);
-          Quagga.decodeSingle({
-            src: url, locate: true,
-            decoder: { readers: ['ean_reader','ean_8_reader','code_128_reader','code_39_reader','code_93_reader','i2of5_reader','upc_reader','upc_e_reader'] }
-          }, (r) => {
-            URL.revokeObjectURL(url); decoding = false;
-            const hint = document.getElementById('scanHintFull');
-            if (r && r.codeResult && r.codeResult.code) {
-              const code = r.codeResult.code;
-              const vr = validateBarcode(code);
-              if (vr === 2) {
-                clearInterval(scanTimer); scanTimer = null;
-                hint.textContent = '✅ 识别成功！';
-                setTimeout(() => onBarcodeDetected(code), 200);
-              } else if (vr === 1) {
-                hint.textContent = '📡 检测到条码，确认中...';
-              }
-            } else if (hint.textContent.includes('✅') || hint.textContent.includes('确认')) {
-              hint.textContent = '📷 Quagga 扫描中...';
+          // 降低JPEG质量加快编码速度
+          canvas.toBlob((blob) => {
+            try {
+              const url = URL.createObjectURL(blob);
+              Quagga.decodeSingle({
+                src: url, locate: true,
+                decoder: { readers: ['ean_reader','ean_8_reader','code_128_reader','code_39_reader','code_93_reader','i2of5_reader','upc_reader','upc_e_reader'] }
+              }, (r) => {
+                URL.revokeObjectURL(url); decoding = false;
+                const hint = document.getElementById('scanHintFull');
+                if (r && r.codeResult && r.codeResult.code) {
+                  const code = r.codeResult.code;
+                  const vr = validateBarcode(code);
+                  if (vr === 2) {
+                    clearInterval(scanTimer); scanTimer = null;
+                    hint.textContent = '✅ 识别成功！';
+                    scanStartTime = Date.now();
+                    setTimeout(() => onBarcodeDetected(code), 200);
+                  } else if (vr === 1) {
+                    hint.textContent = '📡 检测到条码，确认中...';
+                  }
+                } else {
+                  // 长时间未识别到给出提示
+                  if (Date.now() - scanStartTime > 8000) {
+                    hint.textContent = '📷 请调整角度或靠近条码...';
+                    scanStartTime = Date.now();
+                  } else if (!hint.textContent.includes('检测') && !hint.textContent.includes('成功')) {
+                    hint.textContent = isAndroid ? '📷 安卓适配扫描中...' : '📷 Quagga 扫描中...';
+                  }
+                }
+              });
+            } catch(eInner) {
+              decoding = false;
             }
-          });
-        }, 'image/jpeg', 0.95);
-      }, 500);
+          }, 'image/jpeg', 0.8);
+        } catch(e) {
+          decoding = false;
+        }
+      }, 400);
     }
   }
 
