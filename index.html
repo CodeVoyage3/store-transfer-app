@@ -269,7 +269,6 @@
     .confirm-btn-cancel { background: #F3F4F6; color: #6B7280; }
     .confirm-btn-danger { background: #EF4444; color: white; }
   </style>
-  <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
   <script src="xlsx.core.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
@@ -659,7 +658,6 @@
   let detectingBusy = false;
   const isAndroid = /Android/i.test(navigator.userAgent);
   let hasAutoFocus = false;
-  let zxingReader = null;
 
   // ===== 全局错误捕获 =====
   window.onerror = function(msg, url, line) {
@@ -1033,11 +1031,10 @@
   }
 
   // ===== 扫码引擎 =====
-  // 引擎优先级：BarcodeDetector（原生）> @zxing/library（CDN兜底）
+  // 仅使用浏览器原生 BarcodeDetector（最稳定、最快）
   async function initBarcodeDetector() {
-    // BarcodeDetector支持任意角度条码，优先使用
     if ('BarcodeDetector' in window) {
-      const formats = ['ean_13','ean_8','code_128']; // 只开启商品条码常用码制
+      const formats = ['ean_13','ean_8','code_128'];
       try {
         const supported = await BarcodeDetector.getSupportedFormats();
         const available = formats.filter(f => supported.includes(f));
@@ -1049,21 +1046,6 @@
       try { barcodeDetector = new BarcodeDetector(); return true; } catch(e2) {
         try { barcodeDetector = new BarcodeDetector({ formats: formats }); return true; } catch(e3) {}
       }
-    }
-    // 方案二：@zxing/library 兜底（已通过 <script> 标签全局加载）
-    if (typeof ZXing !== 'undefined' && ZXing.BrowserMultiFormatReader) {
-      try {
-        zxingReader = new ZXing.BrowserMultiFormatReader();
-        // 限制码制：只保留商品条码相关
-        if (ZXing.DecodeHintType && zxingReader.hints instanceof Map) {
-          zxingReader.hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-            ZXing.BarcodeFormat.EAN_13,
-            ZXing.BarcodeFormat.EAN_8,
-            ZXing.BarcodeFormat.CODE_128
-          ]);
-        }
-        return true;
-      } catch(e) { console.warn('ZXing init failed:', e); }
     }
     return false;
   }
@@ -1120,8 +1102,9 @@
       const video = document.getElementById('video');
       // Android对焦优化：指定连续自动对焦，降低分辨率提高对焦成功率
       // Android设备使用更低分辨率减少处理压力
-      const camW = 1280;
-      const camH = 720;
+      // 安卓对焦优化：用中等分辨率（低分辨率=大像素=更好对焦）
+      const camW = isAndroid ? 800 : 1280;
+      const camH = isAndroid ? 600 : 720;
       const constraints = {
         video: {
           facingMode: useBackCamera ? 'environment' : 'user',
@@ -1141,15 +1124,22 @@
           });
         } catch(e2) {
           try {
-            // 尝试更高分辨率（部分设备需要高分辨率才能对焦清晰）
+            // 第二降级：标准高清
             mediaStream = await navigator.mediaDevices.getUserMedia({
-              video: { facingMode: useBackCamera ? 'environment' : 'user', width: { ideal: 1920 }, height: { ideal: 1080 } }
+              video: { facingMode: useBackCamera ? 'environment' : 'user', width: { ideal: 1280 }, height: { ideal: 720 } }
             });
           } catch(e3) {
-            // 最终降级：最低分辨率
-            mediaStream = await navigator.mediaDevices.getUserMedia({
-              video: { facingMode: useBackCamera ? 'environment' : 'user', width: { ideal: isAndroid ? 480 : 640 }, height: { ideal: isAndroid ? 360 : 480 } }
-            });
+            try {
+              // 第三降级：高分辨率（部分设备高分辨率才能对焦）
+              mediaStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: useBackCamera ? 'environment' : 'user', width: { ideal: 1920 }, height: { ideal: 1080 } }
+              });
+            } catch(e4) {
+              // 最终降级：最低分辨率
+              mediaStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: useBackCamera ? 'environment' : 'user', width: { ideal: 480 }, height: { ideal: 360 } }
+              });
+            }
           }
         }
       }
@@ -1253,31 +1243,8 @@
     if (isScanning) return;
     isScanning = true;
     const video = document.getElementById('video');
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
     let noDetectStart = Date.now();
     let decoding = false;
-
-    function enhanceFrame() {
-      // 用全帧+图像增强代替小区域裁剪
-      const w = video.videoWidth;
-      const h = video.videoHeight;
-      const tw = 960;
-      const th = Math.round(h * (tw / w));
-      canvas.width = tw;
-      canvas.height = th;
-      ctx.drawImage(video, 0, 0, tw, th);
-      try {
-        const imageData = ctx.getImageData(0, 0, tw, th);
-        const d = imageData.data;
-        for (let i = 0; i < d.length; i += 4) {
-          const gray = d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114;
-          const enhanced = gray < 128 ? gray * 0.85 : Math.min(255, gray * 1.25);
-          d[i] = d[i+1] = d[i+2] = enhanced;
-        }
-        ctx.putImageData(imageData, 0, 0);
-      } catch(e) {}
-    }
 
     function onCode(code, hint) {
       const vr = validateBarcode(code);
@@ -1285,7 +1252,7 @@
         const r = autoAddToBatch(code);
         hint.textContent = '\u2705 \u5df2\u5f55\u5165: ' + r.name + ' \u00d7' + r.qty;
         noDetectStart = Date.now();
-        setTimeout(() => {
+        setTimeout(function() {
           if (isScanning) hint.textContent = '\ud83d\udcf7 \u7ee7\u7eed\u626b\u63cf...';
         }, 1000);
       } else if (vr === 1) {
@@ -1293,54 +1260,27 @@
       }
     }
 
-    if (barcodeDetector && mediaStream) {
-      scanTimer = setInterval(async () => {
-        if (!isScanning || !video.videoWidth || decoding) return;
-        decoding = true;
-        try {
-          const hint = document.getElementById('scanHintFull');
-          let results = null;
-          try { results = await barcodeDetector.detect(video); } catch(e) {}
-          if (!results || results.length === 0) {
-            enhanceFrame();
-            try { results = await barcodeDetector.detect(canvas); } catch(e) {}
-          }
-          if (results && results.length > 0 && results[0].rawValue) {
-            onCode(results[0].rawValue, hint);
-          } else if (Date.now() - noDetectStart > 5000) {
-            hint.textContent = '\ud83d\udcf7 \u8bf7\u5c06\u6761\u7801\u6a2a\u653e\u3001\u4fdd\u6301\u5e73\u7a33\uff0c\u70b9\u51fb\u753b\u9762\u53ef\u8f85\u52a9\u5bf9\u7126';
-            noDetectStart = Date.now();
-          }
-        } catch(e) {}
-        decoding = false;
-      }, 250);
-    } else if (zxingReader) {
-      document.getElementById('scanHintFull').textContent = '\ud83d\udcf7 \u89e3\u7801\u4e2d...';
-      scanTimer = setInterval(async () => {
-        if (!isScanning || !video.videoWidth || decoding) return;
-        decoding = true;
-        try {
-          enhanceFrame();
-          const hint = document.getElementById('scanHintFull');
-          const result = await zxingReader.decodeFromCanvas(canvas);
-          if (result && result.text) {
-            onCode(result.text, hint);
-          } else if (Date.now() - noDetectStart > 5000) {
-            hint.textContent = '\ud83d\udcf7 \u8bf7\u5c06\u6761\u7801\u6a2a\u653e\u3001\u4fdd\u6301\u5e73\u7a33';
-            noDetectStart = Date.now();
-          }
-        } catch(e) {
-          if (Date.now() - noDetectStart > 5000) {
-            document.getElementById('scanHintFull').textContent = '\ud83d\udcf7 \u8bf7\u5c06\u6761\u7801\u6a2a\u653e';
-            noDetectStart = Date.now();
-          }
-        }
-        decoding = false;
-      }, 300);
-    } else {
+    if (!('BarcodeDetector' in window) || !barcodeDetector) {
       document.getElementById('scanHintFull').textContent = '\u26a0\ufe0f \u5f53\u524d\u6d4f\u89c8\u5668\u4e0d\u652f\u6301\u626b\u7801\uff0c\u8bf7\u4f7f\u7528Chrome';
-      scanTimer = setInterval(() => {}, 1000);
+      scanTimer = setInterval(function() {}, 1000);
+      return;
     }
+
+    scanTimer = setInterval(async function() {
+      if (!isScanning || !video.videoWidth || decoding) return;
+      decoding = true;
+      try {
+        const hint = document.getElementById('scanHintFull');
+        const results = await barcodeDetector.detect(video);
+        if (results && results.length > 0 && results[0].rawValue) {
+          onCode(results[0].rawValue, hint);
+        } else if (Date.now() - noDetectStart > 5000) {
+          hint.textContent = '\ud83d\udcf7 \u8bf7\u5c06\u6761\u7801\u6a2a\u653e\u5728\u9ec4\u8272\u6846\u5185\uff0c\u4fdd\u6301\u5e73\u7a33';
+          noDetectStart = Date.now();
+        }
+      } catch(e) {}
+      decoding = false;
+    }, 300);
   }
   // 连续扫码：自动添加到当前调拨单，不关闭扫码界面
   function autoAddToBatch(code) {
