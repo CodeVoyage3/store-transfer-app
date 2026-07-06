@@ -1706,8 +1706,9 @@
     var code = currentScan.barcode;
     var pName = currentScan.product ? currentScan.product.name : '未查到';
     var pCode = currentScan.product ? (currentScan.product.code || '') : '';
-    // 每次扫码都新增一条记录，不覆盖同一箱内同一商品
-    transfers.push({ id: uid(), barcode: code, productName: pName, productCode: pCode, quantity: qty, boxNo: currentBoxNo, storeDest: batchStoreName, batchNo: currentBatchNo, fromStore: batchStoreFrom || '', timestamp: new Date().toISOString() });
+    var exist = transfers.find(function(t) { return t.barcode === code && t.storeDest === batchStoreName && t.batchNo === currentBatchNo && t.boxNo === currentBoxNo; });
+    if (exist) { exist.quantity += qty; }
+    else { transfers.push({ id: uid(), barcode: code, productName: pName, productCode: pCode, quantity: qty, boxNo: currentBoxNo, storeDest: batchStoreName, batchNo: currentBatchNo, fromStore: batchStoreFrom || '', timestamp: new Date().toISOString() }); }
     saveTransfers(); renderRecords(); renderLatestRecords(); updateBoxUI();
     toast('✅ 已录入 ' + pName + ' ×' + qty, 'success');
     document.getElementById('inputQuantity').value = ''; document.getElementById('scanResult').classList.add('hidden'); currentScan = null;
@@ -1772,8 +1773,9 @@
 	      if (!qty || qty < 1) { toast('请输入有效数量', 'error'); return; }
 	      if (!currentScan) return;
 	      var c = currentScan.barcode, pn = currentScan.product ? currentScan.product.name : '未查到', pc = currentScan.product ? (currentScan.product.code || '') : '';
-	      // 每次扫码都新增一条记录，不覆盖同一箱内同一商品
-	      transfers.push({ id: uid(), barcode: c, productName: pn, productCode: pc, quantity: qty, boxNo: currentBoxNo, storeDest: batchStoreName, batchNo: currentBatchNo, fromStore: batchStoreFrom || '', timestamp: new Date().toISOString() });
+	      var exist = transfers.find(function(t) { return t.barcode === c && t.storeDest === batchStoreName && t.batchNo === currentBatchNo && t.boxNo === currentBoxNo; });
+	      if (exist) { exist.quantity += qty; }
+	      else { transfers.push({ id: uid(), barcode: c, productName: pn, productCode: pc, quantity: qty, boxNo: currentBoxNo, storeDest: batchStoreName, batchNo: currentBatchNo, fromStore: batchStoreFrom || '', timestamp: new Date().toISOString() }); }
 	      saveTransfers(); renderRecords(); renderLatestRecords(); updateBoxUI();
 	      toast('✅ 已录入 ' + pn + ' ×' + qty, 'success');
 	      document.getElementById('scanResultOverlay').classList.add('hidden'); currentScan = null;
