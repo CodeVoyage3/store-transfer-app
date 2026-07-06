@@ -191,7 +191,8 @@
     .scanner-hint-full {
       position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
       background: rgba(0,0,0,0.55); color: white; font-size: 13px;
-      padding: 6px 18px; border-radius: 20px; white-space: nowrap;
+      padding: 6px 18px; border-radius: 20px; white-space: normal; text-align: center;
+      max-width: 90%;
     }
     .scanner-loading {
       position: absolute; inset: 0; z-index: 5;
@@ -467,7 +468,7 @@
     <video id="video" autoplay playsinline muted></video>
     <div class="scanner-frame"></div>
     <div class="scanner-scanline"></div>
-    <div class="scanner-hint-full" id="scanHintFull">📷 将条码对准框内</div>
+    <div class="scanner-hint-full" id="scanHintFull">📷 将条码对准框内，模糊请点击画面</div>
     <div class="scanner-loading" id="scannerLoading">
       <div class="scanner-loading-icon">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
@@ -1062,11 +1063,56 @@
   async function startCamera() {
     try {
       const video = document.getElementById('video');
-      mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: useBackCamera ? 'environment' : 'user', width: { ideal: 1280 }, height: { ideal: 720 } }
-      });
+      // Android对焦优化：指定连续自动对焦，降低分辨率提高对焦成功率
+      const constraints = {
+        video: {
+          facingMode: useBackCamera ? 'environment' : 'user',
+          width: { ideal: 960 },
+          height: { ideal: 540 },
+          focusMode: 'continuous-video'
+        }
+      };
+      // 部分Android浏览器需要advanced方式指定对焦模式
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+      } catch(e) {
+        // 降级方案：去掉focusMode，用基础约束重试
+        try {
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: useBackCamera ? 'environment' : 'user', width: { ideal: 960 }, height: { ideal: 540 } }
+          });
+        } catch(e2) {
+          // 最终降级：最低分辨率
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: useBackCamera ? 'environment' : 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+          });
+        }
+      }
       video.srcObject = mediaStream;
       await video.play();
+      // 启动后尝试触发对焦（部分Android设备需要）
+      try {
+        const track = mediaStream.getVideoTracks()[0];
+        if (track && track.getCapabilities) {
+          const caps = track.getCapabilities();
+          if (caps.focusMode && caps.focusMode.includes('continuous-video')) {
+            await track.applyConstraints({ advanced: [{ focusMode: 'continuous-video' }] });
+          }
+        }
+      } catch(ef) { /* 对焦设置非关键，忽略失败 */ }
+      // 点击视频画面触发重新对焦（Android对焦辅助）
+      video.onclick = async function() {
+        try {
+          const t = mediaStream.getVideoTracks()[0];
+          if (t && t.applyConstraints) {
+            await t.applyConstraints({ advanced: [{ focusMode: 'continuous-video' }] });
+          }
+        } catch(e) {}
+        document.getElementById('scanHintFull').textContent = '📷 对焦中...';
+        setTimeout(() => {
+          document.getElementById('scanHintFull').textContent = '📷 将条码对准框内，模糊请点击画面';
+        }, 150);
+      };
       return true;
     } catch(e) {
       return false;
