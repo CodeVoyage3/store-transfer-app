@@ -645,6 +645,7 @@
   let detectingBusy = false;
   const isAndroid = /Android/i.test(navigator.userAgent);
   let hasAutoFocus = false;
+  let zbarDecoder = null;
 
   // ===== 远程商品库同步 =====
   const SECRET_KEY = 'KkV_Tr@nsf3r#2026!';
@@ -1013,19 +1014,18 @@
           barcodeDetector = new BarcodeDetector({ formats: available });
           return true;
         }
-      } catch(e) {
-        // getSupportedFormats失败 → 直接尝试创建BarcodeDetector
+      } catch(e) {}
+      try { barcodeDetector = new BarcodeDetector(); return true; } catch(e2) {
+        try { barcodeDetector = new BarcodeDetector({ formats: formats }); return true; } catch(e3) {}
       }
-      // 降级：不指定格式直接创建BarcodeDetector（使用全部支持的格式）
-      try {
-        barcodeDetector = new BarcodeDetector();
-        return true;
-      } catch(e2) {
-        try {
-          barcodeDetector = new BarcodeDetector({ formats: formats });
-          return true;
-        } catch(e3) {}
-      }
+    }
+    // ZBar WASM降级（支持旋转+QR码，纯WASM解码无DOM冲突）
+    try {
+      const mod = await import('https://cdn.jsdelivr.net/npm/zbar-wasm@2.1.0/dist/zbar-wasm.js');
+      zbarDecoder = new mod.ZBarDecoder();
+      return true;
+    } catch(e) {
+      if (typeof Quagga !== 'undefined') return true;
     }
     return false;
   }
@@ -1235,9 +1235,45 @@
         } catch(e) {}
         detectingBusy = false;
       }, 200);
-    } else {
-      // BarcodeDetector降级：使用Quagga（仅限不支持BarcodeDetector的旧设备）
-      if (typeof Quagga !== 'undefined') {
+    } else if (zbarDecoder) {
+      // ZBar WASM引擎（支持旋转+QR码，无DOM冲突）
+      document.getElementById('scanHintFull').textContent = '📷 解码中...';
+      const video = document.getElementById('video');
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      let decoding = false;
+      let scanStartTime = Date.now();
+      scanTimer = setInterval(async () => {
+        if (!isScanning || !video.videoWidth || decoding) return;
+        try {
+          decoding = true;
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          ctx.drawImage(video, 0, 0);
+          const results = await zbarDecoder.decode(canvas);
+          decoding = false;
+          const hint = document.getElementById('scanHintFull');
+          if (results && results.length > 0 && results[0].decode) {
+            const code = results[0].decode;
+            const vr = validateBarcode(code);
+            if (vr === 2) {
+              clearInterval(scanTimer); scanTimer = null;
+              hint.textContent = '✅ 识别成功！';
+              setTimeout(() => onBarcodeDetected(code), 200);
+            } else if (vr === 1) {
+              hint.textContent = '📡 检测到条码，确认中...';
+            }
+          } else {
+            if (Date.now() - scanStartTime > 8000) {
+              hint.textContent = '📷 请调整角度或靠近条码...';
+              scanStartTime = Date.now();
+            } else if (!hint.textContent.includes('检测') && !hint.textContent.includes('成功')) {
+              hint.textContent = '📷 解码中...';
+            }
+          }
+        } catch(e) { decoding = false; }
+      }, 300);
+    } else if (typeof Quagga !== 'undefined') {
         document.getElementById('scanHintFull').textContent = '📷 降级引擎扫描中...';
         const video = document.getElementById('video');
         const canvas = document.createElement('canvas');
