@@ -638,6 +638,11 @@
   let batchTotalCount = 1;
   let currentBatchNo = 1;
   let continueBatchNo = 0;
+  // 多帧条码投票
+  const BARCODE_VOTES = {};
+  let lastConfirmedCode = '';
+  const BARCODE_VOTE_NEEDED = 3;
+  const BARCODE_VOTE_WINDOW = 3000;
 
   // ===== 远程商品库同步 =====
   const SECRET_KEY = 'KkV_Tr@nsf3r#2026!';
@@ -1119,6 +1124,29 @@
     }
   }
 
+  // 条码校验与多帧投票
+  function validateAndVote(code) {
+    if (!code || code.length < 3 || code.length > 50) return false;
+    // 过滤明显乱码：正常条码只含数字、字母、短横线、空格
+    if (/[^0-9A-Za-z\- ]/.test(code)) return false;
+    if (code === lastConfirmedCode) return false;
+    const now = Date.now();
+    for (const k in BARCODE_VOTES) {
+      if (now - BARCODE_VOTES[k] > BARCODE_VOTE_WINDOW) delete BARCODE_VOTES[k];
+    }
+    if (BARCODE_VOTES[code]) {
+      BARCODE_VOTES[code]++;
+      if (BARCODE_VOTES[code] >= BARCODE_VOTE_NEEDED) {
+        delete BARCODE_VOTES[code];
+        lastConfirmedCode = code;
+        return true;
+      }
+    } else {
+      BARCODE_VOTES[code] = 1;
+    }
+    return false;
+  }
+
   function stopCamera() {
     if (mediaStream) {
       mediaStream.getTracks().forEach(t => t.stop());
@@ -1146,11 +1174,12 @@
           const results = await barcodeDetector.detect(canvas);
           if (results.length > 0 && results[0].rawValue) {
             const code = results[0].rawValue;
-            if (currentScan && currentScan.barcode === code) return;
-            onBarcodeDetected(code);
+            if (validateAndVote(code)) {
+              onBarcodeDetected(code);
+            }
           }
         } catch(e) {}
-      }, 400);
+      }, 200);
     } else {
       // Quagga 引擎
       document.getElementById('scanHintFull').textContent = '📷 Quagga 扫描中...';
@@ -1168,18 +1197,19 @@
           const url = URL.createObjectURL(blob);
           Quagga.decodeSingle({
             src: url, locate: true,
-            decoder: { readers: ['ean_reader','ean_8_reader','code_128_reader','code_39_reader','upc_reader'] }
+            decoder: { readers: ['ean_reader','ean_8_reader','code_128_reader','code_39_reader','code_93_reader','i2of5_reader','upc_reader','upc_e_reader'] }
           }, (r) => {
             URL.revokeObjectURL(url); decoding = false;
             if (r && r.codeResult && r.codeResult.code) {
               const code = r.codeResult.code;
-              if (currentScan && currentScan.barcode === code) return;
-              clearInterval(scanTimer); scanTimer = null;
-              onBarcodeDetected(code);
+              if (validateAndVote(code)) {
+                clearInterval(scanTimer); scanTimer = null;
+                onBarcodeDetected(code);
+              }
             }
           });
-        }, 'image/jpeg', 0.8);
-      }, 1200);
+        }, 'image/jpeg', 0.95);
+      }, 800);
     }
   }
 
