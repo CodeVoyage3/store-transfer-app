@@ -174,19 +174,22 @@
     .scanner-view video { width: 100%; height: 100%; object-fit: cover; }
     .scanner-frame {
       position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
-      width: 70%; height: 30%; border: 2.5px dashed rgba(255,255,255,0.4);
-      border-radius: 16px; pointer-events: none;
+      width: 260px; height: 325px;
+      border: 2.5px solid rgba(255,255,255,0.7);
+      border-radius: 12px; pointer-events: none;
+      box-shadow: 0 0 0 9999px rgba(0,0,0,0.5);
     }
     .scanner-scanline {
-      position: absolute; left: 16%; right: 16%; height: 2px;
+      position: absolute; left: 50%; transform: translateX(-50%);
+      width: 240px; height: 2px;
       background: linear-gradient(90deg, transparent, #7C3AED, #10B981, #7C3AED, transparent);
       box-shadow: 0 0 16px rgba(124,58,237,0.6);
       animation: scanMove 2s ease-in-out infinite;
       pointer-events: none;
     }
     @keyframes scanMove {
-      0%, 100% { top: 22%; }
-      50% { top: 67%; }
+      0%, 100% { top: calc(50% - 152px); }
+      50% { top: calc(50% + 152px); }
     }
     .scanner-hint-full {
       position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
@@ -641,7 +644,7 @@
   // 多帧条码投票
   const BARCODE_VOTES = {};
   let lastConfirmedCode = '';
-  const BARCODE_VOTE_NEEDED = 3;
+  const BARCODE_VOTE_NEEDED = 2;
   const BARCODE_VOTE_WINDOW = 3000;
 
   // ===== 远程商品库同步 =====
@@ -1125,11 +1128,11 @@
   }
 
   // 条码校验与多帧投票
+  // 返回值：0=无效/已确认过，1=检测到投票中，2=投票通过已确认
   function validateAndVote(code) {
-    if (!code || code.length < 3 || code.length > 50) return false;
-    // 过滤明显乱码：正常条码只含数字、字母、短横线、空格
-    if (/[^0-9A-Za-z\- ]/.test(code)) return false;
-    if (code === lastConfirmedCode) return false;
+    if (!code || code.length < 3 || code.length > 50) return 0;
+    if (/[^0-9A-Za-z\- ]/.test(code)) return 0;
+    if (code === lastConfirmedCode) return 0;
     const now = Date.now();
     for (const k in BARCODE_VOTES) {
       if (now - BARCODE_VOTES[k] > BARCODE_VOTE_WINDOW) delete BARCODE_VOTES[k];
@@ -1139,12 +1142,12 @@
       if (BARCODE_VOTES[code] >= BARCODE_VOTE_NEEDED) {
         delete BARCODE_VOTES[code];
         lastConfirmedCode = code;
-        return true;
+        return 2;
       }
     } else {
       BARCODE_VOTES[code] = 1;
     }
-    return false;
+    return 1;
   }
 
   function stopCamera() {
@@ -1165,21 +1168,40 @@
       const video = document.getElementById('video');
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
+      let lastDetectHint = '';
       scanTimer = setInterval(async () => {
         if (!isScanning || !video.videoWidth) return;
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0);
+        const fEl = document.querySelector('.scanner-frame');
+        if (fEl) {
+          const vR = video.getBoundingClientRect(), fR = fEl.getBoundingClientRect();
+          const sx = (fR.left - vR.left) * (video.videoWidth / vR.width);
+          const sy = (fR.top - vR.top) * (video.videoHeight / vR.height);
+          const sw = fR.width * (video.videoWidth / vR.width);
+          const sh = fR.height * (video.videoHeight / vR.height);
+          canvas.width = 640; canvas.height = 800;
+          ctx.drawImage(video, sx, sy, sw, sh, 0, 0, 640, 800);
+        } else {
+          canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+          ctx.drawImage(video, 0, 0);
+        }
         try {
           const results = await barcodeDetector.detect(canvas);
+          const hint = document.getElementById('scanHintFull');
           if (results.length > 0 && results[0].rawValue) {
             const code = results[0].rawValue;
-            if (validateAndVote(code)) {
+            const vr = validateAndVote(code);
+            if (vr === 2) {
+              hint.textContent = '✅ 识别成功！';
               onBarcodeDetected(code);
+            } else if (vr === 1 && code !== lastDetectHint) {
+              lastDetectHint = code;
+              hint.textContent = '📡 检测到条码 ' + code + '，确认中...';
             }
+          } else if (hint.textContent.includes('确认') || hint.textContent.includes('识别成功')) {
+            hint.textContent = '📷 扫描中...';
           }
         } catch(e) {}
-      }, 200);
+      }, 100);
     } else {
       // Quagga 引擎
       document.getElementById('scanHintFull').textContent = '📷 Quagga 扫描中...';
@@ -1187,11 +1209,22 @@
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       let decoding = false;
+      let lastQuaggaHint = '';
       scanTimer = setInterval(() => {
         if (!isScanning || !video.videoWidth || decoding) return;
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0);
+        const fEl2 = document.querySelector('.scanner-frame');
+        if (fEl2) {
+          const vR2 = video.getBoundingClientRect(), fR2 = fEl2.getBoundingClientRect();
+          const sx2 = (fR2.left - vR2.left) * (video.videoWidth / vR2.width);
+          const sy2 = (fR2.top - vR2.top) * (video.videoHeight / vR2.height);
+          const sw2 = fR2.width * (video.videoWidth / vR2.width);
+          const sh2 = fR2.height * (video.videoHeight / vR2.height);
+          canvas.width = 320; canvas.height = 400;
+          ctx.drawImage(video, sx2, sy2, sw2, sh2, 0, 0, 320, 400);
+        } else {
+          canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+          ctx.drawImage(video, 0, 0);
+        }
         decoding = true;
         canvas.toBlob((blob) => {
           const url = URL.createObjectURL(blob);
@@ -1200,16 +1233,24 @@
             decoder: { readers: ['ean_reader','ean_8_reader','code_128_reader','code_39_reader','code_93_reader','i2of5_reader','upc_reader','upc_e_reader'] }
           }, (r) => {
             URL.revokeObjectURL(url); decoding = false;
+            const hint = document.getElementById('scanHintFull');
             if (r && r.codeResult && r.codeResult.code) {
               const code = r.codeResult.code;
-              if (validateAndVote(code)) {
+              const vr = validateAndVote(code);
+              if (vr === 2) {
                 clearInterval(scanTimer); scanTimer = null;
+                hint.textContent = '✅ 识别成功！';
                 onBarcodeDetected(code);
+              } else if (vr === 1 && code !== lastQuaggaHint) {
+                lastQuaggaHint = code;
+                hint.textContent = '📡 检测到条码 ' + code + '，确认中...';
               }
+            } else if (hint.textContent.includes('确认') || hint.textContent.includes('识别成功')) {
+              hint.textContent = '📷 Quagga 扫描中...';
             }
           });
         }, 'image/jpeg', 0.95);
-      }, 800);
+      }, 500);
     }
   }
 
