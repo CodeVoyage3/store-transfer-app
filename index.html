@@ -1252,99 +1252,96 @@
   function startScanning() {
     if (isScanning) return;
     isScanning = true;
-
-    // 扫码通用裁剪函数
     const video = document.getElementById('video');
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     let noDetectStart = Date.now();
     let decoding = false;
 
-    function cropAndDecode(imageSrc) {
-      const crop = getScanBoxCrop();
-      if (crop) {
-        canvas.width = crop.dw;
-        canvas.height = crop.dh;
-        ctx.drawImage(imageSrc, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, crop.dw, crop.dh);
-      } else {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(imageSrc, 0, 0);
-      }
+    function enhanceFrame() {
+      // 用全帧+图像增强代替小区域裁剪
+      const w = video.videoWidth;
+      const h = video.videoHeight;
+      const tw = 960;
+      const th = Math.round(h * (tw / w));
+      canvas.width = tw;
+      canvas.height = th;
+      ctx.drawImage(video, 0, 0, tw, th);
+      try {
+        const imageData = ctx.getImageData(0, 0, tw, th);
+        const d = imageData.data;
+        for (let i = 0; i < d.length; i += 4) {
+          const gray = d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114;
+          const enhanced = gray < 128 ? gray * 0.85 : Math.min(255, gray * 1.25);
+          d[i] = d[i+1] = d[i+2] = enhanced;
+        }
+        ctx.putImageData(imageData, 0, 0);
+      } catch(e) {}
     }
 
-    function handleDetectedCode(code, hint) {
+    function onCode(code, hint) {
       const vr = validateBarcode(code);
       if (vr === 2) {
         const r = autoAddToBatch(code);
-        hint.textContent = '✅ 已录入: ' + r.name + ' ×' + r.qty;
+        hint.textContent = '\u2705 \u5df2\u5f55\u5165: ' + r.name + ' \u00d7' + r.qty;
         noDetectStart = Date.now();
         setTimeout(() => {
-          if (isScanning) hint.textContent = '📷 继续扫描...';
+          if (isScanning) hint.textContent = '\ud83d\udcf7 \u7ee7\u7eed\u626b\u63cf...';
         }, 1000);
       } else if (vr === 1) {
-        hint.textContent = '📡 检测到条码，确认中...';
+        hint.textContent = '\ud83d\udce1 \u68c0\u6d4b\u5230\u6761\u7801\uff0c\u786e\u8ba4\u4e2d...';
       }
-      return vr > 0;
     }
 
     if (barcodeDetector && mediaStream) {
-      // 方案一：浏览器原生 BarcodeDetector
       scanTimer = setInterval(async () => {
-        if (!isScanning || !video.videoWidth) return;
-        if (decoding) return;
+        if (!isScanning || !video.videoWidth || decoding) return;
         decoding = true;
         try {
-          cropAndDecode(video);
           const hint = document.getElementById('scanHintFull');
-          const results = await barcodeDetector.detect(canvas);
-          if (results.length > 0 && results[0].rawValue) {
-            handleDetectedCode(results[0].rawValue, hint);
-          } else {
-            // 5秒无识别提示
-            if (Date.now() - noDetectStart > 5000 && !hint.textContent.includes('请将')) {
-              hint.textContent = '📷 请将商品条码横向放入黄色框内，保持平稳，避免反光。';
-              noDetectStart = Date.now();
-            }
+          let results = null;
+          try { results = await barcodeDetector.detect(video); } catch(e) {}
+          if (!results || results.length === 0) {
+            enhanceFrame();
+            try { results = await barcodeDetector.detect(canvas); } catch(e) {}
+          }
+          if (results && results.length > 0 && results[0].rawValue) {
+            onCode(results[0].rawValue, hint);
+          } else if (Date.now() - noDetectStart > 5000) {
+            hint.textContent = '\ud83d\udcf7 \u8bf7\u5c06\u6761\u7801\u6a2a\u653e\u3001\u4fdd\u6301\u5e73\u7a33\uff0c\u70b9\u51fb\u753b\u9762\u53ef\u8f85\u52a9\u5bf9\u7126';
+            noDetectStart = Date.now();
           }
         } catch(e) {}
         decoding = false;
-      }, 200);
+      }, 250);
     } else if (zxingReader) {
-      // 方案二：@zxing/library 兜底引擎
-      document.getElementById('scanHintFull').textContent = '📷 解码中...';
+      document.getElementById('scanHintFull').textContent = '\ud83d\udcf7 \u89e3\u7801\u4e2d...';
       scanTimer = setInterval(async () => {
-        if (!isScanning || !video.videoWidth) return;
-        if (decoding) return;
+        if (!isScanning || !video.videoWidth || decoding) return;
         decoding = true;
         try {
-          cropAndDecode(video);
+          enhanceFrame();
           const hint = document.getElementById('scanHintFull');
           const result = await zxingReader.decodeFromCanvas(canvas);
           if (result && result.text) {
-            handleDetectedCode(result.text, hint);
-          } else {
-            if (Date.now() - noDetectStart > 5000 && !hint.textContent.includes('请将')) {
-              hint.textContent = '📷 请将商品条码横向放入黄色框内，保持平稳，避免反光。';
-              noDetectStart = Date.now();
-            }
+            onCode(result.text, hint);
+          } else if (Date.now() - noDetectStart > 5000) {
+            hint.textContent = '\ud83d\udcf7 \u8bf7\u5c06\u6761\u7801\u6a2a\u653e\u3001\u4fdd\u6301\u5e73\u7a33';
+            noDetectStart = Date.now();
           }
         } catch(e) {
-          // ZXing 在无条码时会抛异常，这是正常行为
-          const hint = document.getElementById('scanHintFull');
-          if (Date.now() - noDetectStart > 5000 && !hint.textContent.includes('请将')) {
-            hint.textContent = '📷 请将商品条码横向放入黄色框内，保持平稳，避免反光。';
+          if (Date.now() - noDetectStart > 5000) {
+            document.getElementById('scanHintFull').textContent = '\ud83d\udcf7 \u8bf7\u5c06\u6761\u7801\u6a2a\u653e';
             noDetectStart = Date.now();
           }
         }
         decoding = false;
-      }, 200);
+      }, 300);
     } else {
-      document.getElementById('scanHintFull').textContent = '⚠️ 当前浏览器不支持扫码，请使用Chrome';
+      document.getElementById('scanHintFull').textContent = '\u26a0\ufe0f \u5f53\u524d\u6d4f\u89c8\u5668\u4e0d\u652f\u6301\u626b\u7801\uff0c\u8bf7\u4f7f\u7528Chrome';
       scanTimer = setInterval(() => {}, 1000);
     }
   }
-
   // 连续扫码：自动添加到当前调拨单，不关闭扫码界面
   function autoAddToBatch(code) {
     // 震动+提示音
