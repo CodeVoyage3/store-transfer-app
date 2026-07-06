@@ -257,6 +257,7 @@
     .confirm-btn-cancel { background: #F3F4F6; color: #6B7280; }
     .confirm-btn-danger { background: #EF4444; color: white; }
   </style>
+  <script src="quagga.min.js"></script>
   <script src="xlsx.core.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
@@ -1012,7 +1013,19 @@
           barcodeDetector = new BarcodeDetector({ formats: available });
           return true;
         }
-      } catch(e) {}
+      } catch(e) {
+        // getSupportedFormats失败 → 直接尝试创建BarcodeDetector
+      }
+      // 降级：不指定格式直接创建BarcodeDetector（使用全部支持的格式）
+      try {
+        barcodeDetector = new BarcodeDetector();
+        return true;
+      } catch(e2) {
+        try {
+          barcodeDetector = new BarcodeDetector({ formats: formats });
+          return true;
+        } catch(e3) {}
+      }
     }
     return false;
   }
@@ -1223,10 +1236,55 @@
         detectingBusy = false;
       }, 200);
     } else {
-      // BarcodeDetector不可用：显示提示但保持摄像头预览
-      document.getElementById('scanHintFull').textContent = '⚠️ 当前浏览器不支持扫码，请升级浏览器或使用Chrome';
-      // 空循环保持摄像头预览不黑屏
-      scanTimer = setInterval(() => {}, 1000);
+      // BarcodeDetector降级：使用Quagga（仅限不支持BarcodeDetector的旧设备）
+      if (typeof Quagga !== 'undefined') {
+        document.getElementById('scanHintFull').textContent = '📷 降级引擎扫描中...';
+        const video = document.getElementById('video');
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        let decoding = false;
+        let scanStartTime = Date.now();
+        scanTimer = setInterval(() => {
+          if (!isScanning || !video.videoWidth || decoding) return;
+          try {
+            decoding = true;
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+            canvas.toBlob((blob) => {
+              try {
+                const url = URL.createObjectURL(blob);
+                Quagga.decodeSingle({ src: url, locate: true, decoder: { readers: ['ean_reader','ean_8_reader','code_128_reader','code_39_reader','code_93_reader','i2of5_reader','upc_reader','upc_e_reader'] } }, (r) => {
+                  URL.revokeObjectURL(url); decoding = false;
+                  const hint = document.getElementById('scanHintFull');
+                  if (r && r.codeResult && r.codeResult.code) {
+                    const code = r.codeResult.code;
+                    const vr = validateBarcode(code);
+                    if (vr === 2) {
+                      clearInterval(scanTimer); scanTimer = null;
+                      hint.textContent = '✅ 识别成功！';
+                      setTimeout(() => onBarcodeDetected(code), 200);
+                    } else if (vr === 1) {
+                      hint.textContent = '📡 检测到条码，确认中...';
+                    }
+                  } else {
+                    if (Date.now() - scanStartTime > 8000) {
+                      hint.textContent = '📷 请调整角度或靠近条码...';
+                      scanStartTime = Date.now();
+                    } else if (!hint.textContent.includes('检测') && !hint.textContent.includes('成功')) {
+                      hint.textContent = '📷 降级引擎扫描中...';
+                    }
+                  }
+                });
+              } catch(ei) { decoding = false; }
+            }, 'image/jpeg', 0.8);
+          } catch(e) { decoding = false; }
+        }, 400);
+      } else {
+        // 完全无扫码能力
+        document.getElementById('scanHintFull').textContent = '⚠️ 当前浏览器不支持扫码，请使用Chrome';
+        scanTimer = setInterval(() => {}, 1000);
+      }
     }
   }
 
