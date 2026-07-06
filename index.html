@@ -798,9 +798,13 @@
 
   // ===== 基本信息验证 =====
   function checkBasicInfo() {
-    // 扫码页始终可用
     const btn = document.getElementById('btnOpenScanner');
-    if (btn) { btn.classList.remove('disabled'); }
+    if (!btn) return;
+    if (batchStoreName) {
+      btn.classList.remove('disabled');
+    } else {
+      btn.classList.add('disabled');
+    }
   }
 
 
@@ -868,6 +872,7 @@
       batchControl.style.display = 'none';
       actionBtns.style.display = 'none';
     }
+    checkBasicInfo();
   }
 
   // ===== 扫码引擎 =====
@@ -891,6 +896,11 @@
 
   // ===== 打开全屏相机 =====
   async function openScanner() {
+    if (!batchStoreName) {
+      document.getElementById('batchSetupModal').classList.add('open');
+      document.getElementById('setupStoreDest').focus();
+      return;
+    }
     const overlay = document.getElementById('scannerOverlay');
     const loading = document.getElementById('scannerLoading');
     const hint = document.getElementById('scanHintFull');
