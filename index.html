@@ -279,37 +279,7 @@
   <!-- ===== 扫码页 ===== -->
   <div id="sectionScan" class="section active">
 
-    <!-- 顶部：箱管理 + 商品库状态 -->
-    <div class="card" style="padding:10px 14px;">
-      <!-- 第一行：箱号 + 统计 -->
-      <div style="display:flex;align-items:center;justify-content:space-between;">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-size:15px;">📦</span>
-          <span style="font-size:14px;font-weight:700;color:#4F46E5;">
-            箱 <span id="boxNoDisplay">1</span>/<span id="boxTotalSummary">1</span>
-          </span>
-          <span id="boxSummary" style="font-size:12px;color:#6B7280;font-weight:500;">本箱: 0 条 · 0 件</span>
-        </div>
-      </div>
-      <!-- 第二行：操作按钮（带图标+文字） -->
-      <div style="display:flex;align-items:center;gap:6px;margin-top:8px;">
-        <button id="btnPrevBox" style="display:inline-flex;align-items:center;gap:4px;background:#F3F4F6;border:none;border-radius:8px;padding:6px 12px;font-size:12px;color:#374151;cursor:pointer;font-weight:500;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-          上箱
-        </button>
-        <button id="btnNextBox" style="display:inline-flex;align-items:center;gap:4px;background:#F3F4F6;border:none;border-radius:8px;padding:6px 12px;font-size:12px;color:#374151;cursor:pointer;font-weight:500;">
-          下箱
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-        </button>
-        <div style="flex:1;"></div>
-        <button id="btnNewBox" style="display:inline-flex;align-items:center;gap:4px;background:#D1FAE5;border:none;border-radius:8px;padding:6px 12px;font-size:12px;color:#059669;cursor:pointer;font-weight:600;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          新建箱
-        </button>
-      </div>
-    </div>
-
-    <!-- 调拨单状态（精简，仅显示已设置的信息） -->
+    <!-- 调拨单状态 -->
     <div class="card" style="padding:12px 14px;display:none;" id="batchCard">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
         <span style="font-size:13px;font-weight:700;color:#374151;">🏪 调拨单</span>
@@ -344,6 +314,34 @@
             </button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- 箱管理 -->
+    <div class="card" style="padding:10px 14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:15px;">📦</span>
+          <span style="font-size:14px;font-weight:700;color:#4F46E5;">
+            箱 <span id="boxNoDisplay">1</span>/<span id="boxTotalSummary">1</span>
+          </span>
+          <span id="boxSummary" style="font-size:12px;color:#6B7280;font-weight:500;">本箱: 0 条 · 0 件</span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:8px;">
+        <button id="btnPrevBox" style="display:inline-flex;align-items:center;gap:4px;background:#F3F4F6;border:none;border-radius:8px;padding:6px 12px;font-size:12px;color:#374151;cursor:pointer;font-weight:500;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          上箱
+        </button>
+        <button id="btnNextBox" style="display:inline-flex;align-items:center;gap:4px;background:#F3F4F6;border:none;border-radius:8px;padding:6px 12px;font-size:12px;color:#374151;cursor:pointer;font-weight:500;">
+          下箱
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+        <div style="flex:1;"></div>
+        <button id="btnNewBox" style="display:inline-flex;align-items:center;gap:4px;background:#D1FAE5;border:none;border-radius:8px;padding:6px 12px;font-size:12px;color:#059669;cursor:pointer;font-weight:600;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          新建箱
+        </button>
       </div>
     </div>
 
@@ -545,6 +543,11 @@
       <button id="btnCloseSetup" style="background:none;border:none;font-size:22px;color:#9CA3AF;cursor:pointer;">✕</button>
     </div>
     <p style="font-size:13px;color:#9CA3AF;margin-bottom:10px;">请填写调拨信息后开始扫码</p>
+    <div id="batchOrderList" style="display:none;margin-bottom:10px;">
+      <div style="font-size:12px;color:#6B7280;font-weight:600;margin-bottom:4px;">📋 继续已有调拨单</div>
+      <div id="batchOrderItems" style="display:flex;flex-direction:column;gap:4px;max-height:112px;overflow-y:auto;margin-bottom:6px;"></div>
+      <div style="border-top:1px dashed #E5E7EB;margin-bottom:8px;"></div>
+    </div>
     <div class="grid-2 mb-2">
       <div><label>调出门店 *</label><input id="setupStoreFrom" class="input" placeholder="如：东莞厚街万达广场KKV店" /></div>
       <div><label>调入门店 *</label><input id="setupStoreDest" class="input" placeholder="如：东莞壹号广场KKV店" /></div>
@@ -552,6 +555,7 @@
     <div class="mb-2"><label>单据数量 *</label>
       <input id="setupBatchCount" type="number" min="1" step="1" class="input" placeholder="如：3" value="1" />
     </div>
+    <div id="setupBatchHint" style="display:none;font-size:12px;color:#D97706;background:#FEF3C7;border-radius:8px;padding:8px 10px;margin-bottom:6px;"></div>
     <div id="setupError" style="display:none;background:#FEF2F2;color:#DC2626;border-radius:10px;padding:10px 14px;margin-bottom:6px;font-weight:500;font-size:13px;"></div>
     <button id="btnSetupConfirm" class="btn btn-green" style="margin-top:4px;">✅ 开始扫码</button>
   </div>
@@ -614,6 +618,7 @@
   const KEY_PRODUCTS = 'st_products';
   const KEY_TRANSFERS = 'st_transfers';
   const KEY_LAST_VISIT = 'st_last_visit';
+  const KEY_BATCH_SETUP = 'st_batch_setup';
   let products = [], transfers = [];
   let currentScan = null;
   let latestRecords = [];
@@ -631,6 +636,7 @@
   let batchStoreFrom = '';
   let batchTotalCount = 1;
   let currentBatchNo = 1;
+  let continueBatchNo = 0;
 
   // ===== 远程商品库同步 =====
   const SECRET_KEY = 'KkV_Tr@nsf3r#2026!';
@@ -756,6 +762,80 @@
       toast('⚠️ 无法自动保存，请用「💾存」手动备份', 'error');
     }
   }
+  function saveBatchSetup() {
+    trySave(KEY_BATCH_SETUP, {
+      storeFrom: batchStoreFrom,
+      storeDest: batchStoreName,
+      totalCount: batchTotalCount,
+      currentNo: currentBatchNo
+    });
+  }
+  function loadBatchSetup() {
+    const saved = tryLoad(KEY_BATCH_SETUP);
+    if (saved && saved.storeDest) {
+      batchStoreFrom = saved.storeFrom || '';
+      batchStoreName = saved.storeDest;
+      batchTotalCount = saved.totalCount || 1;
+      currentBatchNo = saved.currentNo || 1;
+    }
+  }
+  function refreshBatchOrderList() {
+    const container = document.getElementById('batchOrderItems');
+    const listArea = document.getElementById('batchOrderList');
+    const orders = getSavedBatchOrders();
+    if (orders.length === 0) { listArea.style.display = 'none'; return; }
+    listArea.style.display = 'block';
+    container.innerHTML = orders.map(o => {
+      const sf = o.storeFrom || '';
+      return '<button class="batch-order-item" data-dest="'+o.storeDest+'" data-batch="'+o.batchNo+'" data-from="'+sf+'" style="display:flex;align-items:center;justify-content:space-between;width:100%;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;padding:6px 10px;cursor:pointer;text-align:left;font-size:12px;transition:background .15s;">' +
+        (sf ? '<span style="color:#6B7280;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:55%;">' + sf + ' → ' + o.storeDest + '</span>' : '<span style="color:#6B7280;font-weight:500;">' + o.storeDest + '</span>') +
+        '<span style="color:#4F46E5;font-weight:600;flex-shrink:0;">第'+o.batchNo+'单 · '+o.count+'条</span>' +
+      '</button>';
+    }).join('');
+    container.querySelectorAll('.batch-order-item').forEach(el => {
+      el.addEventListener('mouseenter', () => el.style.background = '#F3F4F6');
+      el.addEventListener('mouseleave', () => el.style.background = '#F9FAFB');
+      el.addEventListener('click', () => {
+        const dest = el.dataset.dest, batchNo = parseInt(el.dataset.batch), sf = el.dataset.from;
+        continueBatchNo = batchNo;
+        document.getElementById('setupStoreFrom').value = sf || batchStoreFrom;
+        document.getElementById('setupStoreDest').value = dest;
+        document.getElementById('setupBatchCount').value = batchNo;
+        document.getElementById('setupError').style.display = 'none';
+        document.getElementById('btnSetupConfirm').click();
+      });
+    });
+  }
+  function openBatchSetupModal() {
+    refreshBatchOrderList();
+    document.getElementById('btnCloseSetup').style.display = '';
+    document.getElementById('batchSetupModal').classList.add('open');
+    setTimeout(updateBatchHint, 50);
+  }
+  function getSavedBatchOrders() {
+    const map = new Map();
+    transfers.forEach(t => {
+      if (!t.storeDest) return;
+      const key = t.storeDest + '|' + (t.batchNo || 1);
+      if (!map.has(key)) {
+        map.set(key, {
+          storeDest: t.storeDest,
+          storeFrom: t.fromStore || '',
+          batchNo: t.batchNo || 1,
+          count: 0,
+          firstTs: t.timestamp || ''
+        });
+      }
+      const entry = map.get(key);
+      entry.count++;
+      if (t.fromStore && !entry.storeFrom) entry.storeFrom = t.fromStore;
+      if (t.timestamp && t.timestamp < entry.firstTs) entry.firstTs = t.timestamp;
+    });
+    return [...map.values()].sort((a, b) => {
+      if (a.firstTs && b.firstTs) return b.firstTs.localeCompare(a.firstTs);
+      return b.count - a.count;
+    });
+  }
 
   // ===== 手动存/取 =====
   function exportAllData() {
@@ -812,6 +892,10 @@
   function fmtDate(iso) {
     if(!iso)return''; const d=new Date(iso);
     return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  }
+  function fmtTime(iso) {
+    if(!iso)return''; const d=new Date(iso);
+    return String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
   }
   function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2,4); }
   function weekStart() { const d=new Date(); d.setDate(d.getDate()-d.getDay()); d.setHours(0,0,0,0); return d.toISOString(); }
@@ -931,9 +1015,7 @@
   // ===== 打开全屏相机 =====
   async function openScanner() {
     if (!batchStoreName) {
-      document.getElementById('batchSetupModal').classList.add('open');
-      document.getElementById('setupStoreFrom').value = batchStoreFrom;
-      document.getElementById('setupStoreFrom').focus();
+      openBatchSetupModal();
       return;
     }
     const overlay = document.getElementById('scannerOverlay');
@@ -1123,9 +1205,7 @@
     const tabMap = { sectionScan: 'tabScan', sectionRecords: 'tabRecords', sectionProducts: 'tabProducts' };
     document.getElementById(tabMap[sectionId]).classList.add('active');
     if (sectionId === 'sectionScan' && !batchStoreName) {
-      document.getElementById('batchSetupModal').classList.add('open');
-      document.getElementById('setupStoreFrom').value = batchStoreFrom;
-      document.getElementById('setupStoreFrom').focus();
+      openBatchSetupModal();
     }
     if (sectionId === 'sectionRecords') { updateStoreFilter(); renderRecords(); }
     if (sectionId === 'sectionProducts') renderProducts();
@@ -1176,7 +1256,8 @@
       const store = r.storeDest || '未填门店';
       const batch = r.batchNo || 1;
       const key = store + '|' + batch;
-      if (!groups[key]) groups[key] = { store, batch, boxes: {} };
+      if (!groups[key]) groups[key] = { store, batch, boxes: {}, firstTime: r.timestamp || '' };
+      else if (r.timestamp && r.timestamp < groups[key].firstTime) groups[key].firstTime = r.timestamp;
       const box = r.boxNo || 1;
       if (!groups[key].boxes[box]) groups[key].boxes[box] = [];
       groups[key].boxes[box].push(r);
@@ -1204,11 +1285,13 @@
       const boxNos = Object.keys(g.boxes).map(Number).sort((a,b) => a-b);
       const total = boxNos.reduce((s, b) => s + g.boxes[b].length, 0);
       const displayName = g.store + ' · 第 ' + g.batch + ' 单';
+      const createdTime = g.firstTime ? fmtDate(g.firstTime) : '';
       html += '<div class="card" style="padding:12px 14px;margin-bottom:10px;">';
-      html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">';
+      html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">';
       html += '<input type="checkbox" class="order-check" data-order="'+esc(key)+'" '+checked+' style="width:16px;height:16px;accent-color:#4F46E5;flex-shrink:0;" />';
       html += '<span style="font-size:14px;font-weight:700;color:#4F46E5;flex:1;">🏪 ' + esc(displayName) + ' <span style="font-size:12px;font-weight:400;color:#9CA3AF;">共 ' + total + ' 条</span></span>';
       html += '<button class="btn-del-order" data-order="'+esc(key)+'" style="background:none;border:none;padding:4px;cursor:pointer;color:#EF4444;font-size:16px;line-height:1;flex-shrink:0;" title="删除此单据">🗑</button></div>';
+      if (createdTime) html += '<div style="font-size:11px;color:#9CA3AF;padding-left:22px;margin-bottom:6px;">🕐 ' + createdTime + '</div>';
       boxNos.forEach(boxNo => {
         const records = g.boxes[boxNo];
         const boxQty = records.reduce((s, r) => s + (r.quantity || 0), 0);
@@ -1553,6 +1636,8 @@
   // ===== Init =====
   loadData();
   checkExpiration();
+  loadBatchSetup();
+  updateBatchUI();
   console.log('[诊断] 本地products数量:', products.length);
   if (products.length > 0) console.log('[诊断] 示例条码:', products[0].barcode);
   await fetchRemoteProducts();
@@ -1682,7 +1767,7 @@
         productCode: (currentScan.product && currentScan.product.code) || '',
         quantity: qty,
         unit: (currentScan.product && currentScan.product.unit) || '个',
-        fromStore: '',
+        fromStore: batchStoreFrom || '',
         toStore: '',
         inboundNo: '',
         transferType: '',
@@ -1796,16 +1881,47 @@
     batchStoreFrom = storeFrom;
     batchStoreName = store;
     batchTotalCount = parseInt(countRaw);
-    currentBatchNo = 1;
+    if (continueBatchNo > 0 && continueBatchNo <= batchTotalCount) {
+      currentBatchNo = continueBatchNo;
+    } else {
+      // 新建调拨单：检查该调入门店是否已有记录，自动分配下一个可用单号
+      const existingForDest = transfers.filter(t => t.storeDest === store && t.batchNo === 1);
+      if (existingForDest.length > 0) {
+        const maxBatch = transfers.filter(t => t.storeDest === store)
+          .reduce((max, t) => Math.max(max, t.batchNo || 1), 0);
+        currentBatchNo = maxBatch + 1;
+        if (currentBatchNo > batchTotalCount) batchTotalCount = currentBatchNo;
+      } else {
+        currentBatchNo = 1;
+      }
+    }
+    continueBatchNo = 0;
+    saveBatchSetup();
     document.getElementById('batchSetupModal').classList.remove('open');
     updateBatchUI();
     toast('✅ 已设置：' + storeFrom + ' → ' + store + '，共 ' + batchTotalCount + ' 单', 'success');
   });
+  function updateBatchHint() {
+    const from = document.getElementById('setupStoreFrom').value.trim();
+    const dest = document.getElementById('setupStoreDest').value.trim();
+    const hintEl = document.getElementById('setupBatchHint');
+    if (!from || !dest || from === dest) { hintEl.style.display = 'none'; return; }
+    const existing = transfers.filter(t => t.storeDest === dest);
+    if (existing.length > 0) {
+      const maxBatch = existing.reduce((max, t) => Math.max(max, t.batchNo || 1), 0);
+      hintEl.innerHTML = '⚠️ <b>' + esc(dest) + '</b> 已有记录（第1~' + maxBatch + '单），<b>将创建第' + (maxBatch + 1) + '单</b>';
+      hintEl.style.display = 'block';
+    } else {
+      hintEl.style.display = 'none';
+    }
+  }
+  document.getElementById('setupStoreFrom').addEventListener('input', updateBatchHint);
+  document.getElementById('setupStoreDest').addEventListener('input', updateBatchHint);
   document.getElementById('btnCloseSetup').addEventListener('click', () => {
     document.getElementById('batchSetupModal').classList.remove('open');
   });
   document.getElementById('btnEditBatchSetup').addEventListener('click', () => {
-    document.getElementById('batchSetupModal').classList.add('open');
+    openBatchSetupModal();
     document.getElementById('setupStoreFrom').value = batchStoreFrom;
     document.getElementById('setupStoreDest').value = batchStoreName;
     document.getElementById('setupBatchCount').value = batchTotalCount;
@@ -1815,10 +1931,11 @@
     batchStoreName = '';
     batchTotalCount = 1;
     currentBatchNo = 1;
+    saveBatchSetup();
     updateBatchUI();
     toast('🔄 已重置调拨单设置', 'success');
     // 自动弹出设置弹窗，调出门店默认带出
-    document.getElementById('batchSetupModal').classList.add('open');
+    openBatchSetupModal();
     document.getElementById('setupStoreFrom').value = batchStoreFrom;
     document.getElementById('setupStoreDest').value = '';
     document.getElementById('setupBatchCount').value = '1';
@@ -2241,9 +2358,7 @@
     const code = document.getElementById('manualBarcode').value.trim();
     if (!code) { toast('请输入条码', 'error'); return; }
     if (!batchStoreName) {
-      document.getElementById('batchSetupModal').classList.add('open');
-      document.getElementById('setupStoreFrom').value = batchStoreFrom;
-      document.getElementById('setupStoreFrom').focus();
+      openBatchSetupModal();
       return;
     }
     var remoteMatch = remoteProductMap.get(code);
