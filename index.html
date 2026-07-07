@@ -710,7 +710,11 @@
   const SECRET_KEY = 'KkV_Tr@nsf3r#2026!';
   const REMOTE_DATA_URLS = [
     'https://raw.githubusercontent.com/CodeVoyage3/config-bootstrap/main/products.bin',
-    'https://cdn.jsdelivr.net/gh/CodeVoyage3/config-bootstrap@main/products.bin'
+    'https://cdn.jsdelivr.net/gh/CodeVoyage3/config-bootstrap@main/products.bin',
+    'https://gcore.jsdelivr.net/gh/CodeVoyage3/config-bootstrap@main/products.bin',
+    'https://fastly.jsdelivr.net/gh/CodeVoyage3/config-bootstrap@main/products.bin',
+    'https://gh-proxy.com/raw.githubusercontent.com/CodeVoyage3/config-bootstrap/main/products.bin',
+    'https://gh.idayer.com/raw.githubusercontent.com/CodeVoyage3/config-bootstrap/main/products.bin'
   ];
   const LS_REMOTE_CACHE = 'st_remote_cache';
   let remoteProductMap = new Map();
@@ -768,9 +772,13 @@
             break;
           }
         }
-      } catch(e) { console.warn('[远程同步] 解密失败(gzip):', e.message); }
+      } catch(e) { console.warn('[远程同步] 获取失败:', url, e.message); }
     }
     if (!encrypted) {
+      // 检查 CryptoJS/pako 是否加载成功
+      if (typeof CryptoJS === 'undefined' || typeof pako === 'undefined') {
+        console.warn('[远程同步] 加密库未加载，可能是网络问题导致脚本下载失败');
+      }
       encrypted = localStorage.getItem(LS_REMOTE_CACHE);
     }
     if (!encrypted) {
@@ -1854,7 +1862,11 @@
 
   // ===== Init 第四步：异步加载远程商品库（不阻塞页面） =====
   (async function() {
-    try { await fetchRemoteProducts(); updateStatus('已同步', true); } catch(e) { updateStatus('本地模式', true); }
+    try {
+        await fetchRemoteProducts();
+        if (remoteProductMap.size > 0) { updateStatus('已同步', true); }
+        else { updateStatus('⚠️ 未加载任何商品（可导入Excel）', false); }
+      } catch(e) { updateStatus('⚠️ 商品加载失败，请导入商品数据', false); }
     try { /* Quagga 加载检查在 startScanner 中内联进行 */ } catch(e) {}
     checkBasicInfo();
     updateBoxUI();
