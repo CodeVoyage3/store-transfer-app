@@ -247,7 +247,7 @@
     /* ===== 自定义确认弹窗 ===== */
     .confirm-overlay {
       position: absolute; inset: 0; background: rgba(0,0,0,0.5);
-      display: none; align-items: center; justify-content: center; z-index: 300;
+      display: none; align-items: center; justify-content: center; z-index: 999;
       padding: 24px;
     }
     .confirm-overlay.open { display: flex; }
@@ -308,7 +308,7 @@
         <span style="font-size:13px;font-weight:700;color:#374151;">🏪 调拨单</span>
         <div style="display:none;gap:4px;" id="batchActionBtns">
           <button id="btnEditBatchSetup" style="background:none;border:none;font-size:11px;color:#4F46E5;cursor:pointer;padding:3px 8px;border-radius:6px;background:#EEF2FF;font-weight:500;">✏️修改</button>
-          <button id="btnResetBatch" style="background:none;border:none;font-size:11px;color:#EF4444;cursor:pointer;padding:3px 8px;border-radius:6px;background:#FEF2F2;font-weight:500;">🔄重置</button>
+          <button id="btnResetBatch" style="background:none;border:none;font-size:11px;color:#059669;cursor:pointer;padding:3px 8px;border-radius:6px;background:#D1FAE5;font-weight:500;">➕新增</button>
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
@@ -1318,7 +1318,7 @@
       html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">';
       html += '<input type="checkbox" class="order-check" data-order="'+esc(key)+'" '+checked+' style="width:16px;height:16px;accent-color:#4F46E5;flex-shrink:0;" />';
       html += '<span style="font-size:14px;font-weight:700;color:#4F46E5;flex:1;">🏪 ' + esc(displayName) + ' <span style="font-size:12px;font-weight:400;color:#9CA3AF;">共 ' + total + ' 条</span></span>';
-      html += '<button class="btn-del-order" data-order="'+esc(key)+'" style="background:none;border:none;padding:4px;cursor:pointer;color:#EF4444;font-size:16px;line-height:1;flex-shrink:0;" title="删除此单据">🗑</button></div>';
+      html += '<button class="btn-del-order" data-order="'+esc(key)+'" style="background:none;border:none;padding:4px 6px;cursor:pointer;color:#EF4444;font-size:12px;line-height:1;flex-shrink:0;white-space:nowrap;" title="删除此单据">🗑 删除</button></div>';
       if (createdTime) html += '<div style="font-size:11px;color:#9CA3AF;padding-left:22px;margin-bottom:6px;">🕐 ' + createdTime + '</div>';
       boxNos.forEach(boxNo => {
         const records = g.boxes[boxNo];
@@ -1691,12 +1691,28 @@
     if (from === dest) { errEl.textContent = '调出和调入门店不能相同'; errEl.style.display = 'block'; return; }
     if (!cnt || cnt < 1) { errEl.textContent = '单据数量至少为1'; errEl.style.display = 'block'; return; }
     errEl.style.display = 'none';
-    if (continueBatchNo > 0) { currentBatchNo = continueBatchNo; continueBatchNo = 0; }
-    else { currentBatchNo = batchTotalCount > 0 && cnt === batchTotalCount ? currentBatchNo : 1; }
-    batchStoreFrom = from; batchStoreName = dest; batchTotalCount = cnt;
-    saveBatchSetup(); document.getElementById('batchSetupModal').classList.remove('open');
-    checkBasicInfo(); updateBatchUI(); updateBoxUI();
-    if (document.getElementById('scannerOverlay').classList.contains('open')) startScanner();
+
+    function doConfirm() {
+      if (continueBatchNo > 0) { currentBatchNo = continueBatchNo; continueBatchNo = 0; }
+      else {
+        // 查找已有记录中此门店组合的最大单号，自动设为下一单
+        var maxBatch = 0;
+        transfers.forEach(function(t) { if (t.fromStore === from && t.storeDest === dest && t.batchNo > maxBatch) maxBatch = t.batchNo; });
+        currentBatchNo = maxBatch > 0 ? maxBatch + 1 : 1;
+      }
+      batchStoreFrom = from; batchStoreName = dest; batchTotalCount = cnt;
+      saveBatchSetup(); document.getElementById('batchSetupModal').classList.remove('open');
+      checkBasicInfo(); updateBatchUI(); updateBoxUI();
+      if (document.getElementById('scannerOverlay').classList.contains('open')) startScanner();
+    }
+
+    // 检查是否已有相同调出/调入门店的调拨记录
+    var hasExisting = transfers.some(function(t) { return t.fromStore === from && t.storeDest === dest; });
+    if (hasExisting) {
+      showConfirm({ title: '已有相同门店调拨记录', msg: '已有 <b>' + from + '</b> → <b>' + dest + '</b> 的调拨记录，是否确认新增调拨单？', danger: false, okText: '确认新增', onOk: doConfirm });
+    } else {
+      doConfirm();
+    }
   }
   // 扫码提交记录
   function submitScanRecord() {
@@ -1750,7 +1766,10 @@
       b.addEventListener('click', () => switchTab(b.dataset.section));
     });
     // 扫码图标
-    document.getElementById('btnOpenScanner').addEventListener('click', () => startScanner());
+    	    document.getElementById('btnOpenScanner').addEventListener('click', () => {
+	      if (!batchStoreName) { openBatchSetupModal(); return; }
+	      startScanner();
+	    });
     // 关闭扫码
     document.getElementById('btnCloseScanner').addEventListener('click', stopScanner);
     // 重试/启动点击
@@ -1792,7 +1811,7 @@
     // 调拨单设置
     document.getElementById('btnSetupConfirm').addEventListener('click', confirmBatchSetup);
     	    document.getElementById('btnCloseSetup').addEventListener('click', () => document.getElementById('batchSetupModal').classList.remove('open'));
-	    // 调拨单修改/重置
+	    // 调拨单修改/新增
 	    document.getElementById('btnEditBatchSetup').addEventListener('click', () => {
 	      document.getElementById('setupStoreFrom').value = batchStoreFrom || '';
 	      document.getElementById('setupStoreDest').value = batchStoreName || '';
@@ -1802,11 +1821,21 @@
 	      setTimeout(updateBatchHint, 50);
 	    });
 	    document.getElementById('btnResetBatch').addEventListener('click', () => {
-	      if (!batchStoreName) { toast('暂无调拨单可重置', ''); return; }
-	      showConfirm({ title: '重置调拨单？', msg: '将清除当前调拨单设置（调出/调入门店、单据数量），不影响已扫码记录。', danger: true, okText: '确认重置', onOk: () => {
+	      function openNewBatchSetup() {
 	        batchStoreFrom = ''; batchStoreName = ''; batchTotalCount = 1; currentBatchNo = 1;
-	        saveBatchSetup(); updateBatchUI(); toast('✅ 已重置调拨单', 'success');
-	      }});
+	        saveBatchSetup(); updateBatchUI();
+	        document.getElementById('setupStoreFrom').value = '';
+	        document.getElementById('setupStoreDest').value = '';
+	        document.getElementById('setupBatchCount').value = 1;
+	        document.getElementById('setupError').style.display = 'none';
+	        document.getElementById('batchSetupModal').classList.add('open');
+	        setTimeout(updateBatchHint, 50);
+	      }
+	      if (transfers.length > 0) {
+	        showConfirm({ title: '检测到已有调拨记录', msg: '已有 <b>' + transfers.length + '</b> 条调拨记录，是否确认新增调拨单？（已有记录不受影响）', danger: false, okText: '是，新增调拨单', onOk: openNewBatchSetup });
+	      } else {
+	        openNewBatchSetup();
+	      }
 	    });
 	    // 箱管理
     document.getElementById('btnNewBox').addEventListener('click', () => {
@@ -1849,6 +1878,13 @@
       document.getElementById('scanCodeRow').className = matched && matched.code ? 'mb-2' : 'mb-2 hidden';
       document.getElementById('scanAddProduct').className = matched ? 'hidden' : '';
       document.getElementById('scanBoxNo').textContent = '第 ' + currentBoxNo + ' 箱';
+      var batchInfoEl = document.getElementById('scanBatchInfo');
+      if (batchStoreName) {
+        document.getElementById('scanBatchRow').style.display = 'block';
+        batchInfoEl.textContent = batchStoreName + ' · 第 ' + currentBatchNo + ' 单';
+      } else {
+        document.getElementById('scanBatchRow').style.display = 'none';
+      }
     });
     document.getElementById('manualBarcode').addEventListener('keydown', function(e) { if (e.key === 'Enter') document.getElementById('btnManualMatch').click(); });
     // 数量提交
